@@ -39,12 +39,12 @@ namespace sycl {
 
         /**
          * Write elt_count elements of type T, from device_ptr to the file.
-         * @param device_ptr pointer to the elements of type T.
+         * @param device_src pointer to the elements of type T.
          * @param elt_count number of elements of type T to write. It should be smaller than the buffer length.
-         * @param offset Writing offset in elements
+         * @param file_offset Writing offset in elements
          * @return The number of elements written, and 0 if we couldn't open the channel, the mode does not allow writing or we want to write too many elements
          */
-        size_t write(const T* device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        size_t write(const T* device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
             if (!open_v_.fd) {
                 return 0;
@@ -67,12 +67,21 @@ namespace sycl {
             args.fd = open_v_.fd;
             args.elt_count = elt_count;
             args.size_bytes_elt = sizeof(T);
-            args.ptr = host_buffer_;
-            args.offset = offset;
+
+            if constexpr(use_dma) {
+                args.ptr = (const void*) device_src;
+            }
+            else {
+                args.ptr = host_buffer_;
+            }
+
+            args.offset = file_offset;
             args.offset_type = offset_type;
 
             // Sending the data to the host
-            memcpy(host_buffer_, device_ptr, sizeof(T) * elt_count);
+            if constexpr(!use_dma) {
+                memcpy(host_buffer_, device_src, sizeof(T) * elt_count);
+            }
 
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;
 
@@ -87,12 +96,12 @@ namespace sycl {
 
         /**
          * Read elt_count elements of type T, from the the file to dst.
-         * @param dst pointer to the device memory where to store the read elements of type T.
+         * @param device_dst pointer to the device memory where to store the read elements of type T.
          * @param elt_count number of elements of type T to write. It should be smaller than the buffer length.
-         * @param offset Reading offset in elements
+         * @param file_offset Reading offset in elements
          * @return The number of elements read, and 0 if we couldn't open the channel, the mode does not allow reading or we want to read too many elements
          */
-        size_t read(T* dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        size_t read(T* device_dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
             if (!open_v_.fd) {
                 return 0;
@@ -116,8 +125,13 @@ namespace sycl {
             args.fd = open_v_.fd;
             args.elt_count = elt_count;
             args.size_bytes_elt = sizeof(T);
-            args.ptr = host_buffer_;
-            args.offset = offset;
+            if constexpr(use_dma) {
+                args.ptr = (void*) device_dst;
+            }
+            else {
+                args.ptr = host_buffer_;
+            }
+            args.offset = file_offset;
             args.offset_type = offset_type;
 
             // Doing the call
@@ -127,30 +141,34 @@ namespace sycl {
             size_t elts_read = result.read_.bytes_read / sizeof(T);
 
             // Getting the data from the host
-            memcpy(dst, host_buffer_, sizeof(T) * elt_count);
+
+            if constexpr(!use_dma) {
+                memcpy(device_dst, host_buffer_, sizeof(T) * elt_count);
+            }
 
             accessor_.release(channel_idx_);
             return elts_read;
         }
 
-        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target tgt, access::placeholder pl>
-        size_t write(const accessor_arg<T, 1, access_mode, tgt, pl>& accessor_arg_1, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
+        size_t
+        write(const accessor_arg<T, 1, access_mode, target, placeholder>& src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
-            const T* ptr = accessor_arg_1.get_pointer() + (ptrdiff_t) accessor_begin;
-            size_t accessor_size = accessor_arg_1.get_count();
+            const T* ptr = src_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+            size_t accessor_size = src_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
-            return write(ptr, sycl::min(space_left, count), offset_type, offset);
+            return write(ptr, sycl::min(space_left, elt_count), offset_type, file_offset);
         }
 
-        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target tgt, access::placeholder pl>
-        size_t read(accessor_arg<T, 1, access_mode, tgt, pl>& accessor_arg_1, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
+        size_t read(accessor_arg<T, 1, access_mode, target, placeholder>& dst_accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
-            T* ptr = accessor_arg_1.get_pointer() + (ptrdiff_t) accessor_begin;
-            size_t accessor_size = accessor_arg_1.get_count();
+            T* ptr = dst_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+            size_t accessor_size = dst_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
-            return read(ptr, sycl::min(space_left, count), offset_type, offset);
+            return read(ptr, sycl::min(space_left, count), offset_type, file_offset);
         }
 
         /**

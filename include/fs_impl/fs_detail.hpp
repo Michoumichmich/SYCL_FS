@@ -187,7 +187,7 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             int32_t offset = 0;
             fs_offset offset_type = fs_offset::current;
-            void* ptr = nullptr;
+            const void* ptr = nullptr;
             size_t size_bytes_elt = 0;
             size_t elt_count = 0;
             FILE* fd = nullptr;
@@ -235,7 +235,7 @@ namespace sycl {
         template<bool use_dma, bool use_pinned_memory>
         static inline void runner_function(sycl::rpc::rpc_channel<functions_def, fs_args, fs_returns>* in)
         {
-            if constexpr(use_dma || (use_dma && use_pinned_memory)) {
+            if constexpr(use_dma && use_pinned_memory) {
                 static_assert(nothing_matched<use_dma>::type);
             }
 

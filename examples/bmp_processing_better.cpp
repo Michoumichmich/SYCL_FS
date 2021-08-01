@@ -43,7 +43,7 @@ size_t launch_image_generator(size_t file_count, sycl::queue& q, size_t work_gro
 {
 
     /* We initialise the file system api on the host  */
-    sycl::fs<uint8_t, true> fs(q, work_groups, bmp::get_buffer_size(width, height));
+    sycl::fs<uint8_t> fs(q, work_groups, bmp::get_buffer_size(width, height));
 
     /* Allocating buffer for processing */
     usm_shared_ptr<pixel, alloc::device> gpu_image_buffer(get_alloc_count(width, height) * work_groups, q);
@@ -51,7 +51,7 @@ size_t launch_image_generator(size_t file_count, sycl::queue& q, size_t work_gro
     q.submit([&, filenames = filenames.raw(), gpu_image_buffer = gpu_image_buffer.raw()](sycl::handler& cgh) {
 
         /* To create the parallel file accessor, we need to pass the sycl::handler in order to get access to local memory (shared within a work group) */
-        sycl::fs_accessor_work_group<uint8_t> image_writer = fs.get_access_work_group(cgh);
+        auto image_writer = fs.get_access_work_group(cgh);
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<generating_kernel>(sycl::nd_range<1>(work_items * work_groups, work_items), [=](sycl::nd_item<1> item) {
             const size_t work_group_id = item.get_group_linear_id();
@@ -86,6 +86,10 @@ size_t launch_image_generator(size_t file_count, sycl::queue& q, size_t work_gro
 size_t launch_image_checker(size_t file_count, sycl::queue& q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared>& filenames, size_t filename_size, size_t width,
         size_t height)
 {
+
+    /**
+     * replace by sycl::fs<uint8_t, true, true> to start using DMA
+     */
     sycl::fs<uint8_t> fs(q, work_groups, bmp::get_buffer_size(width, height));
 
     /* Allocating buffer for processing */
@@ -93,7 +97,7 @@ size_t launch_image_checker(size_t file_count, sycl::queue& q, size_t work_group
 
     q.submit([&, filenames = filenames.raw(), device_image_buffer = device_image_buffer.raw()](sycl::handler& cgh) {
         /* To create the parallel file accessor, we need to pass the sycl::handler in order to get access to local memory (shared within a work group) */
-        sycl::fs_accessor_work_group<uint8_t> image_accessor = fs.get_access_work_group(cgh);
+        auto image_accessor = fs.get_access_work_group(cgh);
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<processing_kernel>(sycl::nd_range<1>(work_items * work_groups, work_items), [=](sycl::nd_item<1> item) {
             const size_t work_group_id = item.get_group_linear_id();

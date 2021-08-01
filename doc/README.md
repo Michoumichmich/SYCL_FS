@@ -33,14 +33,14 @@ Setting this parameter to true does not mean that the runner will necessarily la
 
 ### Sum-up
 
-| `par_host_file_io` | `use_dma`\* | `use_pinned_mem` |           Data flow            |                 Pros                 |                         Cons                          |
-| :----------------: | :----------: | :--------------: | :----------------------------: | :----------------------------------: | :---------------------------------------------------: |
-|      `false`       |   `false`    |       `X`        | storage <-> host OS <-> device |         Works everywhere\*\*         |             The host serializes the calls             |
-|      `false`       |    `true`    |     `false`      |       storage <-> device       |         Data bypasses the OS         | Host blocks until DMA IO succeeded & cost of pinning |
-|      `false`       |    `true`    |      `true`      |       storage <-> device       | Good performances and less CPU usage |      Host runner blocks until DMA IO succeeded       |
-|       `true`       |   `false`    |       `X`        | storage <-> host OS <-> device |   Works everywhere\*\* in parallel   |                    More CPU usage                     |
-|       `true`       |    `true`    |     `false`      |       storage <-> device       |   Bypassing the OS and easy syntax   |                Cost of pinning memory                 |
-|       `true`       |    `true`    |      `true`      |       storage <-> device       |     Bypassing the OS, best perf      |            Forced to use provided buffers             |
+| `par_host_file_io` | `use_dma`\* | `use_pinned_mem` |           Data flow            |                 Pros                 |                         Cons                         |
+| :----------------: | :---------: | :--------------: | :----------------------------: | :----------------------------------: | :--------------------------------------------------: |
+|      `false`       |   `false`   |       `X`        | storage <-> host OS <-> device |         Works everywhere\*\*         |            The host serializes the calls             |
+|      `false`       |   `true`    |     `false`      |       storage <-> device       |         Data bypasses the OS         | Host blocks until DMA IO succeeded & cost of pinning |
+|      `false`       |   `true`    |      `true`      |       storage <-> device       | Good performances and less CPU usage |      Host runner blocks until DMA IO succeeded       |
+|       `true`       |   `false`   |       `X`        | storage <-> host OS <-> device |   Works everywhere\*\* in parallel   |                    More CPU usage                    |
+|       `true`       |   `true`    |     `false`      |       storage <-> device       |   Bypassing the OS and easy syntax   |                Cost of pinning memory                |
+|       `true`       |   `true`    |      `true`      |       storage <-> device       |     Bypassing the OS, best perf      |            Forced to use provided buffers            |
 
 - `X` means not applicable.
 - \* check device+filesystem support with `fs::has_dma`.
@@ -50,7 +50,7 @@ Setting this parameter to true does not mean that the runner will necessarily la
 ## 1.1 `fs` interface
 
 ```C++
-template<typename T, bool parallel_host_file_io = true, bool use_dma = false, bool use_pinned_memory = true>
+template<typename T, bool parallel_host_file_io = true, bool use_dma = false, bool use_pinned_memory = false>
 class fs {
 public:
     /// Constructor
@@ -84,13 +84,13 @@ public:
 
 They are to be called with the same template parameters and arguments as one would want to call the constructor: `const sycl::queue& q, size_t channel_count, size_t buffer_len`
 
-| Static methods                                                       | Description                                                                                                                                      |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `required_host_alloc_size(...);`                                     | Returns the allocation size which will have to be performed on the host by the implementation. Parameters are the same as for the constructor.   |
-| `required_device_alloc_size(...);`                                   | Returns the allocation size which will have to be performed on the device by the implementation. Parameters are the same as for the constructor. |
-| `required_local_alloc_size_work_group(...);`                         | Returns the size of the local memory that will be used for each work group when opening files with `get_access_work_group`.                      |
-| `bool has_support(const sycl::queue& q);`                            | Returns whether the queue supports this API                                                                                                      |
-| `bool has_dma(const sycl::queue& q, const std::string& file = {});` | Returns whether the queue and the file system of the file the supports DMA together.                                                   |
+| Static methods                                                      | Description                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `required_host_alloc_size(...);`                                    | Returns the allocation size which will have to be performed on the host by the implementation. Parameters are the same as for the constructor.   |
+| `required_device_alloc_size(...);`                                  | Returns the allocation size which will have to be performed on the device by the implementation. Parameters are the same as for the constructor. |
+| `required_local_alloc_size_work_group(...);`                        | Returns the size of the local memory that will be used for each work group when opening files with `get_access_work_group`.                      |
+| `bool has_support(const sycl::queue& q);`                           | Returns whether the queue supports this API                                                                                                      |
+| `bool has_dma(const sycl::queue& q, const std::string& file = {});` | Returns whether the queue and the file system of the file the supports DMA together.                                                             |
 
 ## Improvements
 
@@ -128,7 +128,7 @@ enum class fs_mode {
 This accessor offers a single method:
 
 ```C++
-template<typename T, bool use_dma = false, bool use_pinned_memory = true>
+template<typename T, bool use_dma = false, bool use_pinned_memory = false>
 class fs_accessor{
     template<fs_mode mode>
     std::optional<fs_descriptor<T, mode, use_dma, use_pinned_memory>> open(size_t channel_idx, const char* filename) const;
@@ -147,7 +147,7 @@ opens a file, even if it's several times the same one.
 As with the previous accessor, we have only a single method:
 
 ```C++
-template<typename T, bool use_dma = false, bool use_pinned_memory = true>
+template<typename T, bool use_dma = false, bool use_pinned_memory = false>
 class fs_accessor_work_group : protected fs_accessor<T, use_dma, use_pinned_memory> { // Up-cast possible
     template<fs_mode mode>
     std::optional<fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char* filename) const;
@@ -195,16 +195,16 @@ template<typename T, fs_mode open_mode, bool use_dma, bool use_pinned_memory>
 class fs_descriptor {
 public:
     // Write methods
-    size_t write(const T* device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t write(const T* device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0);
 
     template<...>
-    size_t write(const sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t write(const sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0);
 
     //Read methods
-    size_t read(T* dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t read(T* device_dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0);
 
     template<...>
-    size_t read(sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+    size_t read(sycl::accessor<T, 1, ...>& dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
 
     // Close
     void close();
@@ -213,13 +213,13 @@ public:
 
 All the methods are to be called by a single work-item at the same time. We cannot write and read in parallel using this accessor.
 
-| Methods                                                                                                                  | Description                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `write(const T* device_ptr, size_t elt_count, fs_offset offset_type, int32_t offset);`                                   | Writes `elt_count` elements of type `T` from `device_ptr` to the file.                                                                                                      |
-| `write(const sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type, int32_t);` | Writes `count` elements of type `T` from the `sycl::accessor`, with an accessor offset of `accessor_begin` to the file. The accessor must be 1-dimensional and of type `T`. |
-| `read(T* dst, size_t elt_count, fs_offset offset_type, int32_t offset);`                                                 | Reads `elt_count` elements of type `T` to `device_ptr` from the file.                                                                                                       |
-| `read(sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type, int32_t);`        | Reads `count` elements of type `T` to the `sycl::accessor`, with an accessor offset of `accessor_begin` from the file.The accessor must be 1-dimensional and of type `T`.   |
-| `close();`                                                                                                               | Closes the file. The file descriptor cannot be reused.                                                                                                                      |
+| Methods                                                                                                                                      | Description                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `write(const T* device_src, size_t elt_count, fs_offset offset_type, int32_t file_offset);`                                                  | Writes `elt_count` elements of type `T` from `device_src` to the file.                                                                                                          |
+| `write(const sycl::accessor<T, 1, ...>& src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type, int32_t file_offset);` | Writes `elt_count` elements of type `T` from the `sycl::accessor`, with an accessor offset of `accessor_begin` to the file. The accessor must be 1-dimensional and of type `T`. |
+| `read(T* device_dst, size_t elt_count, fs_offset offset_type, int32_t file_offset);`                                                         | Reads `elt_count` elements of type `T` to `device_dst` from the file.                                                                                                           |
+| `read(sycl::accessor<T, 1, ...>& dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type, int32_t file_offset);`        | Reads `elt_count` elements of type `T` to the `sycl::accessor`, with an accessor offset of `accessor_begin` from the file.The accessor must be 1-dimensional and of type `T`.   |
+| `close();`                                                                                                                                   | Closes the file. The file descriptor cannot be reused.                                                                                                                          |
 
 ## 3.3 I/O using the parallel file descriptor (`fs_descriptor_work_group`) and `use_pinned_memory=false`:
 
@@ -231,16 +231,16 @@ template<typename T, fs_mode open_mode, bool use_dma, bool use_pinned_memory>
 class fs_descriptor_work_group {
 public:
     // Write methods
-    size_t write(const T* device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t write(const T* device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
 
     template<...>
-    size_t write(const sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t write(const sycl::accessor<T, 1, ...>& src_accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
 
     //Read methods
-    size_t read(T* dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t read(T* device_dst, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
 
     template<...>
-    size_t read(sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
+    size_t read(sycl::accessor<T, 1, ...>& dst_accessor, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0);
 
     // Close
     void close();
@@ -249,13 +249,13 @@ public:
 
 **Only the arguments passed by the first work-item are considered.**
 
-| Methods                                                                                                                  | Description                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `write(const T* device_ptr, size_t elt_count, fs_offset offset_type, int32_t offset);`                                   | Writes `elt_count` elements of type `T` from `device_ptr` to the file.                                                                                                      |
-| `write(const sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type, int32_t);` | Writes `count` elements of type `T` from the `sycl::accessor`, with an accessor offset of `accessor_begin` to the file. The accessor must be 1-dimensional and of type `T`. |
-| `read(T* dst, size_t elt_count, fs_offset offset_type, int32_t offset);`                                                 | Reads `elt_count` elements of type `T` to `device_ptr` from the file.                                                                                                       |
-| `read(sycl::accessor<T, 1, ...>& accessor, size_t accessor_begin, size_t count, fs_offset offset_type, int32_t);`        | Reads `count` elements of type `T` to the `sycl::accessor`, with an accessor offset of `accessor_begin` from the file.The accessor must be 1-dimensional and of type `T`.   |
-| `close();`                                                                                                               | Closes the file. The file descriptor cannot be reused.                                                                                                                      |
+| Methods                                                                                                                                      | Description                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `write(const T* device_src, size_t elt_count, fs_offset offset_type, int32_t file_offset);`                                                  | Writes `elt_count` elements of type `T` from `device_src` to the file.                                                                                                          |
+| `write(const sycl::accessor<T, 1, ...>& src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type, int32_t file_offset);` | Writes `elt_count` elements of type `T` from the `sycl::accessor`, with an accessor offset of `accessor_begin` to the file. The accessor must be 1-dimensional and of type `T`. |
+| `read(T* device_dst, size_t elt_count, fs_offset offset_type, int32_t file_offset);`                                                         | Reads `elt_count` elements of type `T` to `device_dst` from the file.                                                                                                           |
+| `read(sycl::accessor<T, 1, ...>& dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type, int32_t file_offset);`        | Reads `elt_count` elements of type `T` to the `sycl::accessor`, with an accessor offset of `accessor_begin` from the file.The accessor must be 1-dimensional and of type `T`.   |
+| `close();`                                                                                                                                   | Closes the file. The file descriptor cannot be reused.                                                                                                                          |
 
 ## 3.4 I/O using the single threaded file descriptor and `use_pinned_memory=true`:
 

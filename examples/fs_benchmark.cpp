@@ -34,7 +34,7 @@ size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t 
 
     q.submit([&, filenames = filenames.raw(), device_buffer = device_buffer.raw()](sycl::handler& cgh) {
         /* To create the parallel file accessor, we need to pass the sycl::handler in order to get access to local memory (shared within a work group) */
-        sycl::fs_accessor_work_group<T> parallel_accessor = fs.get_access_work_group(cgh);
+        auto parallel_accessor = fs.get_access_work_group(cgh);
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<processing_kernel>(sycl::nd_range<1>(work_items * work_groups, work_items), [=](sycl::nd_item<1> item) {
             const size_t work_group_id = item.get_group_linear_id();

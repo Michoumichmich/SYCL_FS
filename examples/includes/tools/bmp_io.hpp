@@ -98,10 +98,11 @@ namespace bmp {
         return false;
     }
 
-    static inline bool save_picture_work_group(sycl::nd_item<1> item, size_t channel_idx, sycl::fs_accessor_work_group<uint8_t> acc, const char* filename, size_t width, size_t height, pixel* pixels)
+    template <typename fs_accessor_t>
+    static inline bool save_picture_work_group(sycl::nd_item<1> item, size_t channel_idx, fs_accessor_t acc, const char* filename, size_t width, size_t height, pixel* pixels)
     {
         bmp_headers headers(width, height);
-        auto fh = acc.open<sycl::fs_mode::erase_read_write>(item, channel_idx, filename);
+        auto fh = acc.template open<sycl::fs_mode::erase_read_write>(item, channel_idx, filename);
         if (fh) {
             fh->write(headers.file_header, 14);
             fh->write(headers.info_header, 40);
@@ -132,10 +133,11 @@ namespace bmp {
         return false;
     }
 
-    static inline bool load_picture_work_group(sycl::nd_item<1> item, size_t channel_idx, sycl::fs_accessor_work_group<uint8_t> acc, const char* filename, size_t width, size_t height, pixel* pixels)
+    template <typename fs_accessor_t>
+    static inline bool load_picture_work_group(sycl::nd_item<1> item, size_t channel_idx, fs_accessor_t acc, const char* filename, size_t width, size_t height, pixel* pixels)
     {
         bmp_headers from_file(width, height);
-        auto fh = acc.open<sycl::fs_mode::read_only>(item, channel_idx, filename);
+        auto fh = acc.template open<sycl::fs_mode::read_only>(item, channel_idx, filename);
         if (fh) {
             fh->read(from_file.file_header, 14);
             fh->read(from_file.info_header, 40);

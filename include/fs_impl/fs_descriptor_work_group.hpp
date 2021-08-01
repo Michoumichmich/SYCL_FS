@@ -26,7 +26,7 @@ namespace sycl {
 
     public:
 
-        size_t write(const T* device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        size_t write(const T* device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
             const size_t work_item_id = item_.get_local_linear_id();
             if (!base_descriptor_.open_v_.fd) {
@@ -51,16 +51,26 @@ namespace sycl {
                 args.fd = base_descriptor_.open_v_.fd;
                 args.elt_count = elt_count;
                 args.size_bytes_elt = sizeof(T);
-                args.ptr = base_descriptor_.host_buffer_;
-                args.offset = offset;
+
+                if constexpr(use_dma) {
+                    args.ptr = (const void*) device_src;
+                }
+                else {
+                    args.ptr = base_descriptor_.host_buffer_;
+                }
+
+                args.offset = file_offset;
                 args.offset_type = offset_type;
             }
 
             item_.barrier(sycl::access::fence_space::local_space);
-            if (local_mem_[0].was_acquired) {
-                fs_detail::memcpy_work_group<T>(item_, base_descriptor_.host_buffer_, device_ptr, elt_count);
+
+            if constexpr (!use_dma) {
+                if (local_mem_[0].was_acquired) {
+                    fs_detail::memcpy_work_group<T>(item_, base_descriptor_.host_buffer_, device_src, elt_count);
+                }
+                item_.barrier(sycl::access::fence_space::local_space);
             }
-            item_.barrier(sycl::access::fence_space::local_space);
 
             if (work_item_id == 0) {
                 // Doing the call
@@ -102,7 +112,14 @@ namespace sycl {
                 args.fd = base_descriptor_.open_v_.fd;
                 args.elt_count = elt_count;
                 args.size_bytes_elt = sizeof(T);
-                args.ptr = base_descriptor_.host_buffer_;
+
+                if constexpr(use_dma) {
+                    args.ptr = (void*) device_ptr;
+                }
+                else {
+                    args.ptr = base_descriptor_.host_buffer_;
+                }
+
                 args.offset = offset;
                 args.offset_type = offset_type;
                 // Doing the call
@@ -111,10 +128,12 @@ namespace sycl {
             }
             item_.barrier(sycl::access::fence_space::local_space);
 
-            if (local_mem_[0].was_acquired && local_mem_[0].retval > 0) {
-                fs_detail::memcpy_work_group<T>(item_, device_ptr, base_descriptor_.host_buffer_, elt_count);
+            if constexpr(!use_dma) {
+                if (local_mem_[0].was_acquired && local_mem_[0].retval > 0) {
+                    fs_detail::memcpy_work_group<T>(item_, device_ptr, base_descriptor_.host_buffer_, elt_count);
+                }
+                item_.barrier(sycl::access::fence_space::local_space);
             }
-            item_.barrier(sycl::access::fence_space::local_space);
 
             if (work_item_id == 0) {
                 //printf("bytes %lu \n",result.write_v.bytes_written);
@@ -124,24 +143,25 @@ namespace sycl {
             return local_mem_[0].retval;
         }
 
-        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target tgt, access::placeholder pl>
-        size_t write(const accessor_arg<T, 1, access_mode, tgt, pl>& accessor_arg_1, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
+        size_t
+        write(const accessor_arg<T, 1, access_mode, target, placeholder>& src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
-            const T* ptr = accessor_arg_1.get_pointer() + (ptrdiff_t) accessor_begin;
-            size_t accessor_size = accessor_arg_1.get_count();
+            const T* ptr = src_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+            size_t accessor_size = src_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
-            return write(ptr, sycl::min(space_left, count), offset_type, offset);
+            return write(ptr, sycl::min(space_left, elt_count), offset_type, file_offset);
         }
 
-        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target tgt, access::placeholder pl>
-        size_t read(accessor_arg<T, 1, access_mode, tgt, pl>& accessor_arg_1, size_t accessor_begin, size_t count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
+        template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
+        size_t read(accessor_arg<T, 1, access_mode, target, placeholder>& dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
         {
-            T* ptr = accessor_arg_1.get_pointer() + (ptrdiff_t) accessor_begin;
-            size_t accessor_size = accessor_arg_1.get_count();
+            T* ptr = dst_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+            size_t accessor_size = dst_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
-            return read(ptr, sycl::min(space_left, count), offset_type, offset);
+            return read(ptr, sycl::min(space_left, elt_count), offset_type, file_offset);
         }
 
         void close()

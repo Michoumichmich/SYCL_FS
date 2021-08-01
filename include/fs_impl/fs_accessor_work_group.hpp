@@ -21,11 +21,7 @@ namespace sycl {
         using fs_accessor<T, use_dma, use_pinned_memory>::get_channel_count;
 
         template<fs_mode mode>
-        std::optional<fs_descriptor_work_group < T, mode, use_dma, use_pinned_memory>> open(
-        sycl::nd_item<1> item, size_t
-        channel_idx,
-        const char* filename
-        ) const
+        std::optional<fs_descriptor_work_group < T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char* filename) const
         {
             if (item.get_local_linear_id() == 0) {
                 if (channel_idx >= this->channel_count_) {
