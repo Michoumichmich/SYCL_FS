@@ -58,7 +58,7 @@ namespace sycl {
             func_args_u func_args_{};
             ret_val_u retval_{};
             size_t channel_id_ = 0;
-            bool allowed_to_spawn_host_thread_ = true;
+            int64_t allowed_to_spawn_host_thread_ = true;
             int32_t channel_acquired_ = false;
 
         public:
