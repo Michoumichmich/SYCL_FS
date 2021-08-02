@@ -153,12 +153,12 @@ namespace sycl {
          */
         struct read_args {
             [[maybe_unused]] int32_t pad_1 = 0;
-            int32_t offset = 0;
-            fs_offset offset_type = fs_offset::current;
-            void *ptr = nullptr;
-            size_t size_bytes_elt = 1;
-            size_t elt_count = 1;
-            FILE *fd = nullptr;
+            volatile int32_t offset = 0;
+            volatile fs_offset offset_type = fs_offset::current;
+            volatile void* ptr = nullptr;
+            volatile size_t size_bytes_elt = 1;
+            volatile size_t elt_count = 1;
+            FILE* volatile fd = nullptr;
         };
 
         struct read_return {
@@ -171,7 +171,7 @@ namespace sycl {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
-            return read_return{.bytes_read = args.size_bytes_elt * args.elt_count * fread(args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
+            return read_return{.bytes_read = args.size_bytes_elt * args.elt_count * fread((void*) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
         }
 
         /**
@@ -179,12 +179,12 @@ namespace sycl {
          */
         struct write_args {
             [[maybe_unused]] int32_t pad_1 = 0;
-            int32_t offset = 0;
-            fs_offset offset_type = fs_offset::current;
-            const void *ptr = nullptr;
-            size_t size_bytes_elt = 0;
-            size_t elt_count = 0;
-            FILE *fd = nullptr;
+            volatile int32_t offset = 0;
+            volatile fs_offset offset_type = fs_offset::current;
+            const void* volatile ptr = nullptr;
+            volatile size_t size_bytes_elt = 0;
+            volatile size_t elt_count = 0;
+            FILE* volatile fd = nullptr;
         };
 
         struct write_return {

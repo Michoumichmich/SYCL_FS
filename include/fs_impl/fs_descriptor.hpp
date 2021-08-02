@@ -129,7 +129,7 @@ namespace sycl {
             args.offset = file_offset;
             args.offset_type = offset_type;
 
-            bool spawn = (sizeof(T) * elt_count) > byte_threshold;
+            bool spawn = false;
             // Doing the call
             accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
 
