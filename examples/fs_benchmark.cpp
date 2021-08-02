@@ -65,7 +65,7 @@ int main(int, char **) {
     /* Settings */
     size_t files_to_process = 24 * 5;
     const char format_string[] = "my_file%06d.bmp";
-    size_t file_byte_size = 1024 * 1024 * 2;
+    size_t file_byte_size = 1024 * 1024 * 2; // Size of the file we want to read/write
 
     /* Generating the file names */
     const size_t filename_size = (size_t) std::snprintf(nullptr, 0, format_string, (int) files_to_process) + 1;

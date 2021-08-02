@@ -72,11 +72,38 @@ namespace sycl {
         }
 
         template<typename T>
-        static inline T *memcpy_work_group(sycl::nd_item<1> item, T *dst, const T *src, size_t elt_count) {
+        static inline volatile T *memcpy_work_group(sycl::nd_item<1> item, volatile T *dst, const T *src, size_t elt_count) {
             const size_t work_item_id = item.get_local_linear_id();
             const size_t work_group_size = item.get_local_range(0);
             // Packed memory copy
             for (size_t i = work_item_id; i < elt_count; i += work_group_size) {
+                dst[i] = src[i];
+            }
+            return dst;
+        }
+
+        template<typename T>
+        static inline T *memcpy_work_group(sycl::nd_item<1> item, T *dst, const volatile T *src, size_t elt_count) {
+            const size_t work_item_id = item.get_local_linear_id();
+            const size_t work_group_size = item.get_local_range(0);
+            // Packed memory copy
+            for (size_t i = work_item_id; i < elt_count; i += work_group_size) {
+                dst[i] = src[i];
+            }
+            return dst;
+        }
+
+        template<typename T>
+        static inline volatile T *memcpy(volatile T *dst, const T *src, size_t elt_count) {
+            for (size_t i = 0; i < elt_count; ++i) {
+                dst[i] = src[i];
+            }
+            return dst;
+        }
+
+        template<typename T>
+        static inline T *memcpy(T *dst, const volatile T * src, size_t elt_count) {
+            for (size_t i = 0; i < elt_count; ++i) {
                 dst[i] = src[i];
             }
             return dst;
@@ -148,6 +175,7 @@ namespace sycl {
             }
         }
 
+
         /**
          * Handles reading from a file
          */
@@ -155,7 +183,7 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             volatile int32_t offset = 0;
             volatile fs_offset offset_type = fs_offset::current;
-            volatile void* ptr = nullptr;
+            volatile void* volatile ptr = nullptr; // Volatile pointer to volatile data (yes)
             volatile size_t size_bytes_elt = 1;
             volatile size_t elt_count = 1;
             FILE* volatile fd = nullptr;
@@ -181,7 +209,7 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             volatile int32_t offset = 0;
             volatile fs_offset offset_type = fs_offset::current;
-            const void* volatile ptr = nullptr;
+            const volatile void* volatile ptr = nullptr; // Read only volatile pointer to volatile data
             volatile size_t size_bytes_elt = 0;
             volatile size_t elt_count = 0;
             FILE* volatile fd = nullptr;
@@ -197,7 +225,7 @@ namespace sycl {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
-            return write_return{.bytes_written= args.size_bytes_elt * args.elt_count * fwrite(args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
+            return write_return{.bytes_written= args.size_bytes_elt * args.elt_count * fwrite((void *) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
         }
 
         /**

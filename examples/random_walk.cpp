@@ -69,6 +69,8 @@ std::vector<index_t> generate_file(size_t step_count, size_t size, size_t worker
     return results;
 }
 
+class random_walk_kernel;
+
 /**************************************
  * The random walker that runs on GPU *
  **************************************/
@@ -76,18 +78,16 @@ std::vector<index_t> run_random_walk(sycl::queue& q, size_t step_count, size_t w
 {
     std::vector<index_t> results(worker_count, 0);
     sycl::buffer<index_t, 1> res_buf(results.data(), worker_count);
-    sycl::fs<index_t, false> fs(q, worker_count, 100, 100); // Doing a lot of small IO so we max out the frequency.
+    sycl::fs<index_t> fs(q, worker_count, 1, -1); // Doing a lot of small IO so we max out the frequency.
     q.submit([&](sycl::handler& cgh) {
         auto storage_accessor = fs.get_access();
         auto result_accessor = res_buf.get_access<sycl::access::mode::write>(cgh);
-        sycl::stream os(1024, 256, cgh);
-        cgh.parallel_for(sycl::range<1>(worker_count), [=](sycl::id<1> id) {
+        cgh.parallel_for<random_walk_kernel>(sycl::range<1>(worker_count), [=](sycl::id<1> id) {
             auto data_reader = storage_accessor.open<sycl::fs_mode::read_only>(id.get(0), FILENAME);
             if (!data_reader)
                 return;
             auto current = (index_t) id.get(0);
             for (size_t c = 0; c < step_count; ++c) {
-                os << current << sycl::endl;
                 data_reader->read(&current, 1, sycl::fs_offset::begin, (int32_t) current);
             }
             data_reader->close();
@@ -103,14 +103,13 @@ int main()
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
     assert(sycl::fs<index_t>::has_support(q) && "This queue does not support the FS api");
 
-    size_t step_count = 50;
+    size_t step_count = 1000;
     size_t size = 1024 * 1024;
-    size_t worker_count = 1;
+    size_t worker_count = 10;
     auto expected = generate_file(step_count, size, worker_count);
 
     scope_chrono c("computing values on the device");
     auto results = run_random_walk(q, step_count, worker_count);
-    //  results = run_random_walk(q2, step_count, worker_count);
 
     if (expected == results) {
         std::cout << "Success!\n";

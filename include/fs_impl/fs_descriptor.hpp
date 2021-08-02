@@ -19,7 +19,7 @@ namespace sycl {
         const rpc_accessor_t accessor_;
         const size_t channel_idx_;
         struct fs_detail::open_return open_v_;
-        T *host_buffer_;
+        volatile T *host_buffer_;
         const size_t buffer_len_;
 
         /**
@@ -77,7 +77,7 @@ namespace sycl {
 
             // Sending the data to the host
             if constexpr(!use_dma) {
-                memcpy(host_buffer_, device_src, sizeof(T) * elt_count);
+                fs_detail::memcpy(host_buffer_, device_src, elt_count);
             }
 
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;
@@ -129,7 +129,7 @@ namespace sycl {
             args.offset = file_offset;
             args.offset_type = offset_type;
 
-            bool spawn = false;
+            bool spawn = (sizeof(T) * elt_count) > byte_threshold;;
             // Doing the call
             accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
 
@@ -139,7 +139,7 @@ namespace sycl {
             // Getting the data from the host
 
             if constexpr(!use_dma) {
-                memcpy(device_dst, host_buffer_, sizeof(T) * elt_count);
+                fs_detail::memcpy(device_dst, host_buffer_, elt_count);
             }
 
             accessor_.release(channel_idx_);
@@ -164,6 +164,7 @@ namespace sycl {
             size_t space_left = accessor_size - accessor_begin;
             return read(ptr, sycl::min(space_left, count), offset_type, file_offset);
         }
+
 
         /**
          * Closes the file. The fs_descriptor shouldn't be used after that.
