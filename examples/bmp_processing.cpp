@@ -15,10 +15,9 @@ using namespace usm_smart_ptr;
  * Forces the compiler to dereference the null pointer
  * as writing to OS is part of the observable behaviour.
  */
-void abort_kernel(sycl::stream os)
-{
+void abort_kernel(sycl::stream os) {
     size_t p = 0;
-    os << *reinterpret_cast<int*>((int*) p) << sycl::endl;
+    os << *reinterpret_cast<int *>((int *) p) << sycl::endl;
 }
 
 /**
@@ -36,9 +35,8 @@ void abort_kernel(sycl::stream os)
  * @param width width of the picture
  * @param height height of the picture
  */
-size_t launch_image_generator(size_t files_to_process, sycl::queue& q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared>& filenames, size_t filename_size, size_t width,
-        size_t height)
-{
+size_t launch_image_generator(size_t files_to_process, sycl::queue &q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared> &filenames, size_t filename_size, size_t width,
+                              size_t height) {
 
     /* We initialise the file system api on the host */
     sycl::fs<uint8_t, true> fs(q, work_groups, bmp::get_buffer_size(width, height));
@@ -46,17 +44,17 @@ size_t launch_image_generator(size_t files_to_process, sycl::queue& q, size_t wo
     /* Allocating buffer for processing */
     usm_shared_ptr<pixel, alloc::device> device_image_buffer(width * height * work_groups, q);
 
-    q.submit([&, filenames = filenames.raw(), device_image_buffer = device_image_buffer.raw()](sycl::handler& cgh) {
+    q.submit([&, filenames = filenames.raw(), device_image_buffer = device_image_buffer.raw()](sycl::handler &cgh) {
         sycl::fs_accessor<uint8_t> image_writer = fs.get_access();
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<generating_kernel>(sycl::nd_range<1>(work_items * work_groups, work_items), [=](sycl::nd_item<1> item) {
             const size_t work_group_id = item.get_group_linear_id();
             const size_t work_item_id = item.get_local_linear_id();
-            pixel* work_group_image_buffer = device_image_buffer + work_group_id * width * height; // Each wg has its own memory region
+            pixel *work_group_image_buffer = device_image_buffer + work_group_id * width * height; // Each wg has its own memory region
 
             /* Iterating over the pictures that are to be processed by the current work group */
             for (size_t processed_file_id = work_group_id; processed_file_id < files_to_process; processed_file_id += work_groups) {
-                const char* filename_ptr = filenames + filename_size * processed_file_id; // Getting the file name pointer
+                const char *filename_ptr = filenames + filename_size * processed_file_id; // Getting the file name pointer
 
                 /* Writing dummy data to the buffer with the work items, in a packed manner */
                 for (size_t i = work_item_id; i < width * height; i += work_items) {
@@ -83,20 +81,19 @@ size_t launch_image_generator(size_t files_to_process, sycl::queue& q, size_t wo
 /**
  * Little example of how to read files (fundamentally the same as the previous one)
  */
-size_t launch_image_checker(size_t files_to_process, sycl::queue& q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared>& filenames, size_t filename_size, size_t width,
-        size_t height)
-{
+size_t launch_image_checker(size_t files_to_process, sycl::queue &q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared> &filenames, size_t filename_size, size_t width,
+                            size_t height) {
     sycl::fs<uint8_t> fs(q, work_groups, bmp::get_buffer_size(width, height));
     usm_shared_ptr<pixel, alloc::device> device_image_buffer(width * height * work_groups, q);
-    q.submit([&, filenames = filenames.raw(), device_image_buffer = device_image_buffer.raw()](sycl::handler& cgh) {
+    q.submit([&, filenames = filenames.raw(), device_image_buffer = device_image_buffer.raw()](sycl::handler &cgh) {
         sycl::fs_accessor<uint8_t> image_accessor = fs.get_access();
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<processing_kernel>(sycl::nd_range<1>(work_items * work_groups, work_items), [=](sycl::nd_item<1> item) {
             const size_t work_group_id = item.get_group_linear_id();
             const size_t work_item_id = item.get_local_linear_id();
-            pixel* work_group_image_buffer = device_image_buffer + work_group_id * width * height;
+            pixel *work_group_image_buffer = device_image_buffer + work_group_id * width * height;
             for (size_t processed_file_id = work_group_id; processed_file_id < files_to_process; processed_file_id += work_groups) {
-                const char* filename_ptr = filenames + filename_size * processed_file_id;
+                const char *filename_ptr = filenames + filename_size * processed_file_id;
                 if (item.get_local_linear_id() == 0) {
                     bmp::load_picture(work_group_id, image_accessor, filename_ptr, width, height, work_group_image_buffer);
                 }
@@ -121,8 +118,7 @@ size_t launch_image_checker(size_t files_to_process, sycl::queue& q, size_t work
     return 2 * 3 * width * height * files_to_process; // Data processed
 }
 
-int main(int, char**)
-{
+int main(int, char **) {
     sycl::queue q = try_get_queue(sycl::gpu_selector{});
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
 

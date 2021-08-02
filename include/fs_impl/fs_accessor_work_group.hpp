@@ -11,18 +11,16 @@ namespace sycl {
     private:
         fs_detail::local_accessor_fs_descriptor_work local_mem_;
     protected:
-        fs_accessor_work_group(sycl::handler& cgh, rpc_accessor_t accessor, size_t channel_count, size_t buffer_len, T* buffers)
-                :fs_accessor<T, use_dma, use_pinned_memory>(accessor, channel_count, buffer_len, buffers),
-                 local_mem_(fs_detail::local_accessor_fs_descriptor_work(sycl::range<1>(1), cgh))
-        {
+        fs_accessor_work_group(sycl::handler &cgh, rpc_accessor_t accessor, size_t channel_count, size_t buffer_len, T *buffers)
+                : fs_accessor<T, use_dma, use_pinned_memory>(accessor, channel_count, buffer_len, buffers),
+                  local_mem_(fs_detail::local_accessor_fs_descriptor_work(sycl::range<1>(1), cgh)) {
         }
 
     public:
         using fs_accessor<T, use_dma, use_pinned_memory>::get_channel_count;
 
         template<fs_mode mode>
-        std::optional<fs_descriptor_work_group < T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char* filename) const
-        {
+        std::optional<fs_descriptor_work_group < T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char *filename) const {
             if (item.get_local_linear_id() == 0) {
                 if (channel_idx >= this->channel_count_) {
                     return std::nullopt;
@@ -53,10 +51,9 @@ namespace sycl {
             item.barrier(sycl::access::fence_space::local_space);
             if (!local_mem_[0].open_v.fd) {
                 return std::nullopt;
-            }
-            else {
+            } else {
                 return fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>(item, local_mem_, this->accessor_, channel_idx, local_mem_[0].open_v, this->get_host_buffer(channel_idx),
-                        this->buffer_len_);
+                                                                                     this->buffer_len_);
             }
 
         }

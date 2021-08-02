@@ -2,17 +2,15 @@
 
 #include <sycl/sycl.hpp>
 
-static inline sycl::event memcpy_with_dependency(sycl::queue& q, void* dst, const void* src, size_t num_bytes, const sycl::event& dep_event)
-{
-    return q.submit([=](sycl::handler& cgh) {
+static inline sycl::event memcpy_with_dependency(sycl::queue &q, void *dst, const void *src, size_t num_bytes, const sycl::event &dep_event) {
+    return q.submit([=](sycl::handler &cgh) {
         cgh.depends_on(dep_event);
         cgh.memcpy(dst, src, num_bytes);
     });
 }
 
-static inline sycl::event memcpy_with_dependency(sycl::queue& q, void* dst, const void* src, size_t num_bytes, const std::vector<sycl::event>& dep_event)
-{
-    return q.submit([&](sycl::handler& cgh) {
+static inline sycl::event memcpy_with_dependency(sycl::queue &q, void *dst, const void *src, size_t num_bytes, const std::vector<sycl::event> &dep_event) {
+    return q.submit([&](sycl::handler &cgh) {
         cgh.depends_on(dep_event);
         cgh.memcpy(dst, src, num_bytes);
     });

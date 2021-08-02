@@ -15,3 +15,6 @@ add_sycl_to_target(TARGET demo_rpc SOURCES examples/demo_rpc.cpp)
 
 add_executable(fs_benchmark examples/fs_benchmark.cpp ${LIBRARY_INCLUDES})
 add_sycl_to_target(TARGET fs_benchmark SOURCES examples/fs_benchmark.cpp)
+
+add_executable(random_walk examples/random_walk.cpp ${LIBRARY_INCLUDES})
+add_sycl_to_target(TARGET random_walk SOURCES examples/random_walk.cpp)

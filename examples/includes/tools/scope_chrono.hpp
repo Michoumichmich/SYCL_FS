@@ -11,11 +11,11 @@ class scope_chrono {
 public:
     inline scope_chrono();
 
-    inline explicit scope_chrono(std::string&& caller_name);
+    inline explicit scope_chrono(std::string &&caller_name);
 
-    inline scope_chrono(const scope_chrono&) = delete;
+    inline scope_chrono(const scope_chrono &) = delete;
 
-    scope_chrono& operator=(const scope_chrono&) = delete;
+    scope_chrono &operator=(const scope_chrono &) = delete;
 
     inline double stop();
 
@@ -28,29 +28,24 @@ private:
 };
 
 inline scope_chrono::scope_chrono()
-        :start_(std::chrono::high_resolution_clock::now())
-{
+        : start_(std::chrono::high_resolution_clock::now()) {
 }
 
-inline scope_chrono::~scope_chrono()
-{
+inline scope_chrono::~scope_chrono() {
     double elapsed_seconds = scope_chrono::stop();
     if (!caller_.empty()) {
         std::cerr << "time in " << caller_ << " : " << elapsed_seconds << "s" << std::endl;
-    }
-    else {
+    } else {
         std::cerr << "time " << elapsed_seconds << "s" << std::endl;
     }
 }
 
-inline scope_chrono::scope_chrono(std::string&& caller_name)
-        :scope_chrono()
-{
+inline scope_chrono::scope_chrono(std::string &&caller_name)
+        : scope_chrono() {
     caller_ = caller_name;
 }
 
-inline double scope_chrono::stop()
-{
+inline double scope_chrono::stop() {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
     return static_cast<double>(duration.count()) / 1000000.0;

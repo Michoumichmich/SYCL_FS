@@ -25,7 +25,7 @@ the DMA support, this api works in an emulated mode and uses the host's OS to st
 - Batch processing: See the example. With a single kernel launch and one fixed-size memory allocations, we can process an unbound number of files on the device (without having to re-alloc or re-launch
   kernels).
 - Processing files that do not fit in the memory of the GPU: to process a petabyte dataset, on a regular GPU one would have to launch tons of kernels and manage the data. What if the kernel has to
-  perform random accesses on the file? Now it can all be done from the kernel.
+  perform random accesses on the file? Now it can all be done from the kernel. See [random_walk](examples/random_walk.cpp) which couldn't be eaily GPU accelerated otherwise.
 - And many more!
 
 ### Async RPC features

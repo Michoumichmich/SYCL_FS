@@ -16,7 +16,7 @@ namespace sycl {
         rpc_accessor_t accessor_;
         size_t channel_count_;
         size_t buffer_len_;
-        T* buffers_;
+        T *buffers_;
 
     protected:
         /**
@@ -26,15 +26,14 @@ namespace sycl {
          * @param buffer_len Maximum length (count of elements T) of one read/write
          * @param buffers Pointers to all IO buffers
          */
-        fs_accessor(rpc_accessor_t accessor, size_t channel_count, size_t buffer_len, T* buffers)
-                :accessor_(accessor),
-                 channel_count_(channel_count),
-                 buffer_len_(buffer_len),
-                 buffers_(buffers) { }
+        fs_accessor(rpc_accessor_t accessor, size_t channel_count, size_t buffer_len, T *buffers)
+                : accessor_(accessor),
+                  channel_count_(channel_count),
+                  buffer_len_(buffer_len),
+                  buffers_(buffers) {}
 
     protected:
-        T* get_host_buffer(size_t channel_idx) const
-        {
+        T *get_host_buffer(size_t channel_idx) const {
             return buffers_ + channel_idx * buffer_len_;
         }
 
@@ -44,8 +43,7 @@ namespace sycl {
          * Returns the number of channel that can be opened.
          * @return
          */
-        size_t get_channel_count()
-        {
+        size_t get_channel_count() {
             return channel_count_;
         }
 
@@ -57,11 +55,7 @@ namespace sycl {
          * @return a std optional containing, on success, the file descriptor
          */
         template<fs_mode mode>
-        std::optional<fs_descriptor < T, mode, use_dma, use_pinned_memory>> open(
-        size_t channel_idx,
-        const char* filename
-        ) const
-        {
+        std::optional<fs_descriptor < T, mode, use_dma, use_pinned_memory>> open(size_t channel_idx, const char *filename) const {
             if (channel_idx >= channel_count_) {
                 return std::nullopt;
             }
@@ -76,7 +70,7 @@ namespace sycl {
             args.open_.opening_mode = mode;
             memcpy(args.open_.filename, filename, filename_len);
             //Opening the file on the host
-            if (!accessor_.call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, true)) {
+            if (!accessor_.call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, false)) {
                 return std::nullopt;
             }
             struct fs_detail::open_return res = accessor_.get_result(channel_idx).open_;

@@ -17,22 +17,20 @@ using namespace usm_smart_ptr;
  * Forces the compiler to dereference the null pointer
  * as writing to OS is part of the observable behaviour.
  */
-void abort_kernel(sycl::stream os)
-{
+void abort_kernel(sycl::stream os) {
     size_t p = 0;
-    os << *reinterpret_cast<int*>((int*) p) << sycl::endl;
+    os << *reinterpret_cast<int *>((int *) p) << sycl::endl;
 }
 
 template<typename T>
-size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared>& filenames, size_t filename_size)
-{
+size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue &q, size_t work_groups, size_t work_items, const usm_shared_ptr<char, alloc::shared> &filenames, size_t filename_size) {
     size_t file_elt_count = file_size / sizeof(T) + (file_size % sizeof(T) != 0);
 
     /* Allocating buffer for processing */
     usm_shared_ptr<T, alloc::device> device_buffer(file_elt_count * work_groups, q);
-    sycl::fs<T> fs(q, work_groups, file_elt_count);
+    sycl::fs<T, true, true> fs(q, work_groups, file_elt_count);
 
-    q.submit([&, filenames = filenames.raw(), device_buffer = device_buffer.raw()](sycl::handler& cgh) {
+    q.submit([&, filenames = filenames.raw(), device_buffer = device_buffer.raw()](sycl::handler &cgh) {
         /* To create the parallel file accessor, we need to pass the sycl::handler in order to get access to local memory (shared within a work group) */
         auto parallel_accessor = fs.get_access_work_group(cgh);
         sycl::stream os(1024, 256, cgh);
@@ -40,11 +38,11 @@ size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t 
             const size_t work_group_id = item.get_group_linear_id();
             const size_t work_item_id = item.get_local_linear_id();
             const size_t channel_idx = work_group_id;
-            T* wg_buffer = device_buffer + channel_idx * file_elt_count;
+            T *wg_buffer = device_buffer + channel_idx * file_elt_count;
 
             /* Iterating over the pictures that are to be processed by the current work group */
             for (size_t processed_file_id = work_group_id; processed_file_id < file_count; processed_file_id += work_groups) {
-                const char* filename_ptr = filenames + filename_size * processed_file_id;
+                const char *filename_ptr = filenames + filename_size * processed_file_id;
                 auto fh = parallel_accessor.template open<sycl::fs_mode::erase_read_write>(item, channel_idx, filename_ptr);
 
                 if (!fh) { abort_kernel(os); }
@@ -58,8 +56,7 @@ size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t 
     return 2U * file_size * file_count; // Data processed
 }
 
-int main(int, char**)
-{
+int main(int, char **) {
     sycl::queue q = try_get_queue(sycl::cpu_selector{});
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
 

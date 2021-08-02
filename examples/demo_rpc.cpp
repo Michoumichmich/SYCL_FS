@@ -7,8 +7,7 @@
  * @param j
  * @return
  */
-static int cpu_func_rpc_int(size_t j)
-{
+static int cpu_func_rpc_int(size_t j) {
     std::cout << "[host] Called func 1 from work-item/group " << j << " and going to sleep" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     std::cout << "[host wakes-up] from call to func 1 from work-item/group " << j << std::endl;
@@ -20,8 +19,7 @@ static int cpu_func_rpc_int(size_t j)
  * @param j
  * @return
  */
-static int cpu_func_rpc_float(double j)
-{
+static int cpu_func_rpc_float(double j) {
     std::cout << "[host] Called func 2 from work-item/group " << j << " and going to sleep" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     std::cout << "[host wakes-up] from call to func 2 from work-item/group " << j << std::endl;
@@ -46,15 +44,14 @@ union results {
     volatile int f_2;
 };
 
-void runner_function(sycl::rpc::rpc_channel<functions_def, args, results>* in)
-{
+void runner_function(sycl::rpc::rpc_channel<functions_def, args, results> *in) {
     switch (in->get_function()) {
-    case functions_def::cpu_func_1:
-        in->set_retval(results{.f_1 = cpu_func_rpc_int(in->get_func_args().f_1)});
-        break;
-    case functions_def::cpu_func_2:
-        in->set_retval(results{.f_2 = cpu_func_rpc_float(in->get_func_args().f_2)});
-        break;
+        case functions_def::cpu_func_1:
+            in->set_retval(results{.f_1 = cpu_func_rpc_int(in->get_func_args().f_1)});
+            break;
+        case functions_def::cpu_func_2:
+            in->set_retval(results{.f_2 = cpu_func_rpc_float(in->get_func_args().f_2)});
+            break;
     }
     in->set_result_ready();
 }
@@ -72,8 +69,7 @@ class demo_rpc_kernel_sync;
  * The second example shows the synchronous use and with blocking function calls, but without the threaded host execution policy thing
  * @return
  */
-int main()
-{
+int main() {
     size_t n_threads = 10;
     sycl::queue q = try_get_queue(sycl::gpu_selector{}); // Change your device
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
@@ -81,7 +77,7 @@ int main()
     // We create an RPC runner on the host
     sycl::async_rpc<functions_def, args, results, true> rpc_runner(n_threads, q, runner_function, 10000000);
 
-    q.submit([&](sycl::handler& cgh) {
+    q.submit([&](sycl::handler &cgh) {
         // Getting an asynchronous accessor for the device
         auto async_caller = rpc_runner.get_access<true>(); // true for async
         sycl::stream os(1024, 256, cgh);
@@ -117,7 +113,7 @@ int main()
         });
     }).wait();
 
-    q.submit([&](sycl::handler& cgh) {
+    q.submit([&](sycl::handler &cgh) {
         auto sync_caller = rpc_runner.get_access<false>(); // false for not async
         sycl::stream os(1024, 256, cgh);
         cgh.parallel_for<demo_rpc_kernel_sync>(sycl::range<1>(n_threads), [=](sycl::id<1> i) {
@@ -131,8 +127,7 @@ int main()
             // DPC++ seems to be adding an implicit barrier (or is it related to the output stream ?)
             if (res) {
                 os << "[sync] get_result: " << res->f_2 << sycl::endl;
-            }
-            else {
+            } else {
                 os << "[sync] call failed" << sycl::endl;
             }
 

@@ -48,8 +48,7 @@ namespace sycl {
          * @param str
          * @return
          */
-        static inline size_t strlen(const char* str)
-        {
+        static inline size_t strlen(const char *str) {
             size_t i;
             for (i = 0; str[i] != '\0'; ++i);
             return i;
@@ -62,10 +61,9 @@ namespace sycl {
          * @return see libc
          */
         template<typename T>
-        static inline int memcmp(const T* str_1, const T* str_2, size_t count)
-        {
-            const auto* s_1 = (const uint8_t*) str_1;
-            const auto* s_2 = (const uint8_t*) str_2;
+        static inline int memcmp(const T *str_1, const T *str_2, size_t count) {
+            const auto *s_1 = (const uint8_t *) str_1;
+            const auto *s_2 = (const uint8_t *) str_2;
             while (count-- > 0) {
                 if (*s_1++ != *s_2++)
                     return s_1[-1] < s_2[-1] ? -1 : 1;
@@ -74,8 +72,7 @@ namespace sycl {
         }
 
         template<typename T>
-        static inline T* memcpy_work_group(sycl::nd_item<1> item, T* dst, const T* src, size_t elt_count)
-        {
+        static inline T *memcpy_work_group(sycl::nd_item<1> item, T *dst, const T *src, size_t elt_count) {
             const size_t work_item_id = item.get_local_linear_id();
             const size_t work_group_size = item.get_local_range(0);
             // Packed memory copy
@@ -109,29 +106,28 @@ namespace sycl {
 
         struct open_return {
             [[maybe_unused]] size_t pad_1 = 0;
-            FILE* fd = nullptr;
+            FILE *fd = nullptr;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static open_return open(const open_args& args)
-        {
+        static open_return open(const open_args &args) {
             //std::cerr << "[info] Opening: " << std::string(args.filename) << std::endl;
             switch (args.opening_mode) {
-            case fs_mode::read_only:
-                return {.fd =fopen(args.filename, "rb")};
-            case fs_mode::write_only:
-                return {.fd =fopen(args.filename, "wb")};
-            case fs_mode::append_only:
-                return {.fd =fopen(args.filename, "ab")};
-            case fs_mode::read_write:
-                return {.fd =fopen(args.filename, "rb+")};
-            case fs_mode::erase_read_write:
-                return {.fd =fopen(args.filename, "wb+")};
-            case fs_mode::append_read:
-                return {.fd =fopen(args.filename, "ab+")};
-            case fs_mode::none:
-            default:
-                return {.fd = nullptr};
+                case fs_mode::read_only:
+                    return open_return{.fd =fopen(args.filename, "rb")};
+                case fs_mode::write_only:
+                    return open_return{.fd =fopen(args.filename, "wb")};
+                case fs_mode::append_only:
+                    return open_return{.fd =fopen(args.filename, "ab")};
+                case fs_mode::read_write:
+                    return open_return{.fd =fopen(args.filename, "rb+")};
+                case fs_mode::erase_read_write:
+                    return open_return{.fd =fopen(args.filename, "wb+")};
+                case fs_mode::append_read:
+                    return open_return{.fd =fopen(args.filename, "ab+")};
+                case fs_mode::none:
+                default:
+                    return open_return{.fd = nullptr};
             }
 
 
@@ -142,12 +138,11 @@ namespace sycl {
          */
         struct close_args {
             [[maybe_unused]] size_t pad_1 = 0;
-            FILE* fd;
+            FILE *fd;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline void close(const close_args& args)
-        {
+        static inline void close(const close_args &args) {
             if (args.fd) {
                 fclose(args.fd);
             }
@@ -160,10 +155,10 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             int32_t offset = 0;
             fs_offset offset_type = fs_offset::current;
-            void* ptr = nullptr;
+            void *ptr = nullptr;
             size_t size_bytes_elt = 1;
             size_t elt_count = 1;
-            FILE* fd = nullptr;
+            FILE *fd = nullptr;
         };
 
         struct read_return {
@@ -172,8 +167,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline read_return read(const read_args& args)
-        {
+        static inline read_return read(const read_args &args) {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
@@ -187,10 +181,10 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             int32_t offset = 0;
             fs_offset offset_type = fs_offset::current;
-            const void* ptr = nullptr;
+            const void *ptr = nullptr;
             size_t size_bytes_elt = 0;
             size_t elt_count = 0;
-            FILE* fd = nullptr;
+            FILE *fd = nullptr;
         };
 
         struct write_return {
@@ -199,8 +193,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline write_return write(const write_args& args)
-        {
+        static inline write_return write(const write_args &args) {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
@@ -233,8 +226,7 @@ namespace sycl {
          * is should be done.
          */
         template<bool use_dma, bool use_pinned_memory>
-        static inline void runner_function(sycl::rpc::rpc_channel<functions_def, fs_args, fs_returns>* in)
-        {
+        static inline void runner_function(sycl::rpc::rpc_channel<functions_def, fs_args, fs_returns> *in) {
             if constexpr(use_dma && use_pinned_memory) {
                 static_assert(nothing_matched<use_dma>::type);
             }
@@ -242,30 +234,30 @@ namespace sycl {
 
             asm("":: :"memory"); // Memory barrier to be sure everything was written.
             switch (in->get_function()) {
-            case functions_def::open: {
-                struct open_return res = open(in->get_func_args().open_);
-                //std::cerr << "[info] Opened fd: " << res.fd << std::endl;
-                in->set_retval(fs_returns{.open_ = res});
-            }
-                break;
-            case functions_def::close: {
-                close(in->get_func_args().close_);
-                in->set_func_args(fs_args{.close_ = {.fd=nullptr}});
-                //std::cerr << "[info] Closing fd: " << in->get_func_args().close_a.fd << std::endl;
-            }
-                break;
-            case functions_def::read: {
-                //std::cout << "Reading fd: " << in->get_func_args().read_a.fd << " n_elts: " << in->get_func_args().read_a.elt_count << std::endl;
-                struct read_return res = read(in->get_func_args().read_);
-                in->set_retval(fs_returns{.read_ = res});
-            }
-                break;
-            case functions_def::write: {
-                //std::cout << "Writing fd: " << in->get_func_args().write_a.fd << " n_elts: " << in->get_func_args().write_a.elt_count << std::endl;
-                struct write_return res = write(in->get_func_args().write_);
-                in->set_retval(fs_returns{.write_ = res});
-            }
-                break;
+                case functions_def::open: {
+                    struct open_return res = open(in->get_func_args().open_);
+                    //std::cerr << "[info] Opened fd: " << res.fd << std::endl;
+                    in->set_retval(fs_returns{.open_ = res});
+                }
+                    break;
+                case functions_def::close: {
+                    close(in->get_func_args().close_);
+                    in->set_func_args(fs_args{.close_ = {.fd=nullptr}});
+                    //std::cerr << "[info] Closing fd: " << in->get_func_args().close_a.fd << std::endl;
+                }
+                    break;
+                case functions_def::read: {
+                    //std::cout << "Reading fd: " << in->get_func_args().read_a.fd << " n_elts: " << in->get_func_args().read_a.elt_count << std::endl;
+                    struct read_return res = read(in->get_func_args().read_);
+                    in->set_retval(fs_returns{.read_ = res});
+                }
+                    break;
+                case functions_def::write: {
+                    //std::cout << "Writing fd: " << in->get_func_args().write_a.fd << " n_elts: " << in->get_func_args().write_a.elt_count << std::endl;
+                    struct write_return res = write(in->get_func_args().write_);
+                    in->set_retval(fs_returns{.write_ = res});
+                }
+                    break;
             }
             asm("":: :"memory"); // Memory barrier to be sure everything was written.
             in->set_result_ready();

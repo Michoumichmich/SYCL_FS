@@ -4,13 +4,12 @@
 
 class demo_fs_kernel;
 
-int main()
-{
+int main() {
     sycl::queue q = try_get_queue(sycl::gpu_selector{}); // Change your device
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
     sycl::fs<char> fs(q, 10, 200);
 
-    q.submit([&](sycl::handler& cgh) {
+    q.submit([&](sycl::handler &cgh) {
         sycl::fs_accessor<char> acc = fs.get_access();
         sycl::stream os(1024, 256, cgh);
         cgh.single_task<demo_fs_kernel>([=]() {

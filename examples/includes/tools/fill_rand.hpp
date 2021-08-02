@@ -12,20 +12,17 @@ using namespace usm_smart_ptr;
  * Fills a container/array with random numbers from positions first to last
  */
 template<typename T, class ForwardIt>
-static inline void do_fill_rand_on_host(ForwardIt first, ForwardIt last)
-{
+static inline void do_fill_rand_on_host(ForwardIt first, ForwardIt last) {
     static std::random_device dev;
     static std::mt19937 engine(dev());
     auto generator = [&]() {
         if constexpr (std::is_integral<T>::value) {
             static std::uniform_int_distribution<T> distribution;
             return distribution(engine);
-        }
-        else if constexpr (std::is_floating_point<T>::value) {
+        } else if constexpr (std::is_floating_point<T>::value) {
             static std::uniform_real_distribution<T> distribution;
             return distribution(engine);
-        }
-        else if constexpr (std::is_same_v<T, sycl::half>) {
+        } else if constexpr (std::is_same_v<T, sycl::half>) {
             static std::uniform_real_distribution<float> distribution;
             return distribution(engine);
         }
@@ -40,9 +37,8 @@ static inline void do_fill_rand_on_host(ForwardIt first, ForwardIt last)
  * usm memory allocated, but here we can avoid doing that.
  */
 template<typename T>
-static inline void fill_rand(host_accessible_ptr<T> v, size_t count)
-{
-    do_fill_rand_on_host<T>((T*) v, (T*) v + count);
+static inline void fill_rand(host_accessible_ptr<T> v, size_t count) {
+    do_fill_rand_on_host<T>((T *) v, (T *) v + count);
 }
 
 /**
@@ -55,7 +51,6 @@ fill_rand(const usm_ptr<T, location> &v, size_t count) {
 }*/
 
 template<typename T>
-static inline void fill_rand(std::vector<T>& v)
-{
+static inline void fill_rand(std::vector<T> &v) {
     do_fill_rand_on_host<T>(v.begin(), v.end());
 }

@@ -46,7 +46,8 @@ Setting this parameter to true does not mean that the runner will necessarily la
 - \* check device+filesystem support with `fs::has_dma`.
 - \* \* everywhere where `fs::has_support` is `true`.
 - All calls can be emitted in parallel from a kernel.
-- A reasonable optimization on a Host/CPU device would be to use "DMA" even if the user didn't specified using DMA as this avoids useless memory copies and does not change the compatibility nor the observable behaviour. 
+- A reasonable optimization on a Host/CPU device would be to use "DMA" even if the user didn't specified using DMA as this avoids useless memory copies and does not change the compatibility nor the
+  observable behaviour.
 
 ## 1.1 `fs` interface
 

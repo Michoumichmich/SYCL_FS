@@ -9,25 +9,24 @@ namespace sycl {
     class fs_descriptor_work_group {
         friend fs_accessor_work_group<T, use_dma, use_pinned_memory>;
     private:
-        fs_descriptor<T, open_mode, use_dma, use_pinned_memory> base_descriptor_;
+        fs_descriptor <T, open_mode, use_dma, use_pinned_memory> base_descriptor_;
         sycl::nd_item<1> item_;
         fs_detail::local_accessor_fs_descriptor_work local_mem_;
     protected:
-        fs_descriptor_work_group(const sycl::nd_item<1>& item,
-                const fs_detail::local_accessor_fs_descriptor_work& local_mem,
-                rpc_accessor_t acc,
-                size_t channel_idx,
-                const struct fs_detail::open_return& open,
-                T* host_buffer,
-                size_t buffer_len)
-                :base_descriptor_(acc, channel_idx, open, host_buffer, buffer_len),
-                 item_(item),
-                 local_mem_(local_mem) { }
+        fs_descriptor_work_group(const sycl::nd_item<1> &item,
+                                 const fs_detail::local_accessor_fs_descriptor_work &local_mem,
+                                 rpc_accessor_t acc,
+                                 size_t channel_idx,
+                                 const struct fs_detail::open_return &open,
+                                 T *host_buffer,
+                                 size_t buffer_len)
+                : base_descriptor_(acc, channel_idx, open, host_buffer, buffer_len),
+                  item_(item),
+                  local_mem_(local_mem) {}
 
     public:
 
-        size_t write(const T* device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
-        {
+        size_t write(const T *device_src, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0) {
             const size_t work_item_id = item_.get_local_linear_id();
             if (!base_descriptor_.open_v_.fd) {
                 return 0;
@@ -53,9 +52,8 @@ namespace sycl {
                 args.size_bytes_elt = sizeof(T);
 
                 if constexpr(use_dma) {
-                    args.ptr = (const void*) device_src;
-                }
-                else {
+                    args.ptr = (const void *) device_src;
+                } else {
                     args.ptr = base_descriptor_.host_buffer_;
                 }
 
@@ -85,8 +83,7 @@ namespace sycl {
             return local_mem_[0].retval;
         }
 
-        size_t read(T* device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0)
-        {
+        size_t read(T *device_ptr, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t offset = 0) {
             const size_t work_item_id = item_.get_local_linear_id();
             if (!base_descriptor_.open_v_.fd) {
                 return 0;
@@ -114,16 +111,16 @@ namespace sycl {
                 args.size_bytes_elt = sizeof(T);
 
                 if constexpr(use_dma) {
-                    args.ptr = (void*) device_ptr;
-                }
-                else {
+                    args.ptr = (void *) device_ptr;
+                } else {
                     args.ptr = base_descriptor_.host_buffer_;
                 }
 
+                bool spawn = (sizeof(T) * elt_count) > byte_threshold;
                 args.offset = offset;
                 args.offset_type = offset_type;
                 // Doing the call
-                base_descriptor_.accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, true);
+                base_descriptor_.accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
                 local_mem_[0].retval = base_descriptor_.accessor_.get_result(base_descriptor_.channel_idx_).read_.bytes_read / sizeof(T);
             }
             item_.barrier(sycl::access::fence_space::local_space);
@@ -145,9 +142,8 @@ namespace sycl {
 
         template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
         size_t
-        write(const accessor_arg<T, 1, access_mode, target, placeholder>& src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
-        {
-            const T* ptr = src_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+        write(const accessor_arg<T, 1, access_mode, target, placeholder> &src_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0) {
+            const T *ptr = src_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
             size_t accessor_size = src_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
@@ -155,17 +151,15 @@ namespace sycl {
         }
 
         template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
-        size_t read(accessor_arg<T, 1, access_mode, target, placeholder>& dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0)
-        {
-            T* ptr = dst_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
+        size_t read(accessor_arg<T, 1, access_mode, target, placeholder> &dst_accessor, size_t accessor_begin, size_t elt_count, fs_offset offset_type = fs_offset::current, int32_t file_offset = 0) {
+            T *ptr = dst_accessor.get_pointer() + (ptrdiff_t) accessor_begin;
             size_t accessor_size = dst_accessor.get_count();
             if (accessor_begin >= accessor_size) return 0;
             size_t space_left = accessor_size - accessor_begin;
             return read(ptr, sycl::min(space_left, elt_count), offset_type, file_offset);
         }
 
-        void close()
-        {
+        void close() {
             if (item_.get_local_linear_id() == 0) {
                 base_descriptor_.close();
             }
@@ -175,8 +169,7 @@ namespace sycl {
          * Queries the file descriptor to get the maximum number of elts T one could read/write at once.
          * @return
          */
-        size_t get_max_single_io_count()
-        {
+        size_t get_max_single_io_count() {
             return base_descriptor_.get_max_single_io_count();
         }
 
