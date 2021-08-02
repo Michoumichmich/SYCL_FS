@@ -124,7 +124,7 @@ size_t launch_image_checker(size_t file_count, sycl::queue &q, size_t work_group
 }
 
 int main(int, char **) {
-    sycl::queue q = try_get_queue(sycl::cpu_selector{});
+    sycl::queue q = try_get_queue(sycl::gpu_selector{});
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
 
     /* Settings */
