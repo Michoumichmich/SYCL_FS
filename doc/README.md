@@ -105,7 +105,7 @@ files are opened in binary mode.
 The user has to provide a channel index when opening a file. The channel index can be reused, but one channel cannot be used in parallel to open a file. Using a single channel across all the kernel
 will thus serialise all the file I/O.
 
-An accessor can be used to open any number of files using the channels you want.
+An accessor can be used to open any number of files using the channels you want. They can all be used in parallel. The return values are the number of elements saved or read.
 
 ## 2.1 File opening modes:
 

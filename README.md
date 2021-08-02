@@ -10,6 +10,7 @@ the DMA support, this api works in an emulated mode and uses the host's OS to st
 - Concurrent filesystem I/O from all the work-groups and work-items of a SYCL parallel kernel, at the same time.
 - Can leverage device's hardware IO features to bypass the host OS.
 - Possibility to open a file across a whole work-group to increase throughput and avoid the **divergence of the control flow**.
+- Possibility to write dataset-size independant kernels [see](examples/bmp_processing_better.cpp)
 - USM and accessor interface.
 - Dynamic threaded access to the underlying filesystem (enabled by default).
 - I/O latency control to reduce pressure on the CPU.

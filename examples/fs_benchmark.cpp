@@ -30,7 +30,7 @@ size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t 
 
     /* Allocating buffer for processing */
     usm_shared_ptr<T, alloc::device> device_buffer(file_elt_count * work_groups, q);
-    sycl::fs<T> fs(q, work_groups, file_elt_count + 1);
+    sycl::fs<T> fs(q, work_groups, file_elt_count);
 
     q.submit([&, filenames = filenames.raw(), device_buffer = device_buffer.raw()](sycl::handler& cgh) {
         /* To create the parallel file accessor, we need to pass the sycl::handler in order to get access to local memory (shared within a work group) */
@@ -60,7 +60,7 @@ size_t run_one_pass(size_t file_count, size_t file_size, sycl::queue& q, size_t 
 
 int main(int, char**)
 {
-    sycl::queue q = try_get_queue(sycl::gpu_selector{});
+    sycl::queue q = try_get_queue(sycl::cpu_selector{});
     std::cout << "Running on: " << q.get_device().get_info<sycl::info::device::name>() << std::endl;
 
     assert(sycl::fs<bool>::has_support(q) && "This queue does not support the FS api");
