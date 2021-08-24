@@ -124,8 +124,8 @@ namespace sycl {
             }
 
             auto data_ptr = (sycl::uchar *) get_host_buffer(channel_idx);
-            for (int x = 0; x < res.x; ++x) {
-                for (int y = 0; y < res.y; +y) {
+            for (size_t x = 0; x < res.x; ++x) {
+                for (size_t y = 0; y < res.y; +y) {
                     sycl::uchar *local_ptr = data_ptr + (y * 4 * res.x) + 4 * x;
                     image_accessor[id<2>(x, y)] == sycl::uchar4{local_ptr[0], local_ptr[1], local_ptr[2], local_ptr[3]};
                 }

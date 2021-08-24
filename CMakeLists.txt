@@ -3,7 +3,7 @@ project(SYCL_FS LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 
 # If you're using the DPCPP compiler, these flags will be used. Set here the devices you want to target
-set(DPCPP_FLAGS -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -Wno-unknown-cuda-version -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=sm_75)
+set(DPCPP_FLAGS -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -Wno-unknown-cuda-version -Xsycl-target-backend=nvptx64-nvidia-cuda-sycldevice --cuda-gpu-arch=sm_75)
 #set(DPCPP_FLAGS -fsycl -fsycl-targets=spir64_x86_64-unknown-unknown-sycldevice)
 include(cmake/FindSYCL.cmake)
 

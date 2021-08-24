@@ -269,12 +269,12 @@ namespace sycl {
             ok = stbi_info(args.filename, &x, &y, &n);
             if (!ok) {
                 throw std::runtime_error("Failed opening: "s + args.filename);
-            } else if (sizeof(char) * x * y * 4 > args.available_space) {
+            } else if (sizeof(char) * (size_t) x * (size_t) y * 4 > args.available_space) {
                 throw std::runtime_error("Buffer too small to load: "s + args.filename);
             }
 
             unsigned char *data = stbi_load(args.filename, &x, &y, &n, 4);
-            std::memcpy(args.ptr, data, sizeof(char) * x * y * 4);
+            std::memcpy(args.ptr, data, sizeof(char) * (size_t) x * (size_t) y * 4);
             stbi_image_free(data);
             return image_loading_return{.x=(size_t) x, .y=(size_t) y};
         }
