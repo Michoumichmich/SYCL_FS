@@ -13,13 +13,14 @@ namespace sycl {
         sycl::nd_item<1> item_;
         fs_detail::local_accessor_fs_descriptor_work local_mem_;
     protected:
-        fs_descriptor_work_group(const sycl::nd_item<1> &item,
-                                 const fs_detail::local_accessor_fs_descriptor_work &local_mem,
-                                 rpc_accessor_t acc,
-                                 size_t channel_idx,
-                                 const struct fs_detail::open_return &open,
-                                 T *host_buffer,
-                                 size_t buffer_len)
+        fs_descriptor_work_group(
+                const sycl::nd_item<1> &item,
+                const fs_detail::local_accessor_fs_descriptor_work &local_mem,
+                rpc_accessor_t acc,
+                size_t channel_idx,
+                const struct fs_detail::open_return &open,
+                T *host_buffer,
+                size_t buffer_len)
                 : base_descriptor_(acc, channel_idx, open, host_buffer, buffer_len),
                   item_(item),
                   local_mem_(local_mem) {}

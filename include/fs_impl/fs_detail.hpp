@@ -45,9 +45,15 @@ namespace sycl {
          * matched
          * @tparam M
          */
-        template<bool M>
+        template<class ... args>
         struct nothing_matched : std::false_type {
         };
+
+        template<class ... args>
+        constexpr void fail_to_compile() {
+            static_assert(nothing_matched<args...>::value);
+        }
+
 
         /**
          * Returns the length of a string. Principally used to get the filename length
@@ -308,7 +314,7 @@ namespace sycl {
         template<bool use_dma, bool use_pinned_memory>
         static inline void runner_function(sycl::rpc::rpc_channel<functions_def, fs_args, fs_returns> *in) {
             if constexpr(use_dma && use_pinned_memory) {
-                static_assert(nothing_matched<use_dma>::type);
+                fail_to_compile<use_dma>();
             }
 
 

@@ -25,8 +25,7 @@ namespace sycl {
         /**
          * Shouldn't be called by a user.
          */
-        fs_descriptor(rpc_accessor_t acc, size_t channel_idx, const struct fs_detail::open_return &open, T *host_buffer, size_t buffer_len)
-                :
+        fs_descriptor(rpc_accessor_t acc, size_t channel_idx, const struct fs_detail::open_return &open, T *host_buffer, size_t buffer_len) :
                 accessor_(acc),
                 channel_idx_(channel_idx),
                 open_v_(open),
