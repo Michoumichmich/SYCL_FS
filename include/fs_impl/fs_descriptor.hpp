@@ -16,7 +16,7 @@ namespace sycl {
         friend fs_descriptor_work_group<T, open_mode, use_dma, use_pinned_memory>;
         friend fs_accessor<T, use_dma, use_pinned_memory>;
     protected:
-        const rpc_accessor_t accessor_;
+        const rpc_accessor_t rpc_accessor_;
         const size_t channel_idx_;
         struct fs_detail::open_return open_v_;
         volatile T *host_buffer_;
@@ -26,7 +26,7 @@ namespace sycl {
          * Shouldn't be called by a user.
          */
         fs_descriptor(rpc_accessor_t acc, size_t channel_idx, const struct fs_detail::open_return &open, T *host_buffer, size_t buffer_len) :
-                accessor_(acc),
+                rpc_accessor_(acc),
                 channel_idx_(channel_idx),
                 open_v_(open),
                 host_buffer_(host_buffer),
@@ -55,7 +55,7 @@ namespace sycl {
                 return 0;
             }
             // We acquire the channel which guarantees we're the only ones using the host_buffer which is tied to the channel index
-            if (!accessor_.acquire(channel_idx_)) {
+            if (!rpc_accessor_.acquire(channel_idx_)) {
                 return 0;
             }
 
@@ -82,11 +82,11 @@ namespace sycl {
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;
 
             // Doing the call
-            accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
-            auto result = accessor_.get_result(channel_idx_);
+            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
+            auto result = rpc_accessor_.get_result(channel_idx_);
             size_t elts_written = result.write_.bytes_written / sizeof(T);
             //printf("bytes %lu \n",result.write_v.bytes_written);
-            accessor_.release(channel_idx_);
+            rpc_accessor_.release(channel_idx_);
             return elts_written;
         }
 
@@ -111,7 +111,7 @@ namespace sycl {
             }
 
             // We acquire the channel which guarantees we're the only ones using the host_buffer which is tied to the channel index
-            if (!accessor_.acquire(channel_idx_)) {
+            if (!rpc_accessor_.acquire(channel_idx_)) {
                 return 0;
             }
 
@@ -130,9 +130,9 @@ namespace sycl {
 
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;;
             // Doing the call
-            accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
+            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
 
-            auto result = accessor_.get_result(channel_idx_);
+            auto result = rpc_accessor_.get_result(channel_idx_);
             size_t elts_read = result.read_.bytes_read / sizeof(T);
 
             // Getting the data from the host
@@ -141,7 +141,7 @@ namespace sycl {
                 fs_detail::memcpy(device_dst, host_buffer_, elt_count);
             }
 
-            accessor_.release(channel_idx_);
+            rpc_accessor_.release(channel_idx_);
             return elts_read;
         }
 
@@ -174,10 +174,10 @@ namespace sycl {
 
             bool was_only_read = (open_mode == fs_mode::read_only); // Spawning a thread when there were writes
 
-            accessor_.template call_remote_procedure<fs_detail::functions_def::close>(channel_idx_, fs_detail::fs_args{.close_ = args}, !was_only_read);
-            accessor_.wait(channel_idx_);
+            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::close>(channel_idx_, fs_detail::fs_args{.close_ = args}, !was_only_read);
+            rpc_accessor_.wait(channel_idx_);
             open_v_.fd = nullptr;
-            accessor_.release(channel_idx_);
+            rpc_accessor_.release(channel_idx_);
         }
 
         /**

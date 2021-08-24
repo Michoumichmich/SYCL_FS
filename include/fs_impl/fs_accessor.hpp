@@ -13,7 +13,7 @@ namespace sycl {
         friend fs<T, true, use_dma, use_pinned_memory>;
         friend fs<T, false, use_dma, use_pinned_memory>;
     protected:
-        rpc_accessor_t accessor_;
+        rpc_accessor_t rpc_accessor_;
         size_t channel_count_;
         size_t buffer_len_;
         T *buffers_;
@@ -27,7 +27,7 @@ namespace sycl {
          * @param buffers Pointers to all IO buffers
          */
         fs_accessor(rpc_accessor_t accessor, size_t channel_count, size_t buffer_len, T *buffers)
-                : accessor_(accessor),
+                : rpc_accessor_(accessor),
                   channel_count_(channel_count),
                   buffer_len_(buffer_len),
                   buffers_(buffers) {}
@@ -70,13 +70,13 @@ namespace sycl {
             args.open_.opening_mode = mode;
             memcpy(args.open_.filename, filename, filename_len);
             //Opening the file on the host
-            if (!accessor_.call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, false)) {
+            if (!rpc_accessor_.call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, false)) {
                 return std::nullopt;
             }
-            struct fs_detail::open_return res = accessor_.get_result(channel_idx).open_;
-            accessor_.release(channel_idx);
+            struct fs_detail::open_return res = rpc_accessor_.get_result(channel_idx).open_;
+            rpc_accessor_.release(channel_idx);
             if (res.fd) {
-                return fs_descriptor<T, mode, use_dma, use_pinned_memory>(accessor_, channel_idx, res, get_host_buffer(channel_idx), buffer_len_);
+                return fs_descriptor<T, mode, use_dma, use_pinned_memory>(rpc_accessor_, channel_idx, res, get_host_buffer(channel_idx), buffer_len_);
             }
             return std::nullopt;
         }
@@ -111,15 +111,15 @@ namespace sycl {
             args.load_image_.available_space = sizeof(T) * buffer_len_;
             memcpy(args.load_image_.filename, filename, filename_len);
             //Load and decode the picture on the host
-            if (!accessor_.call_remote_procedure<fs_detail::functions_def::load_image, true, false>(channel_idx, args, true)) {
+            if (!rpc_accessor_.call_remote_procedure<fs_detail::functions_def::load_image, true, false>(channel_idx, args, true)) {
                 // failed to acquire the channel
                 return std::nullopt;
             }
-            struct fs_detail::image_loading_return res = accessor_.get_result(channel_idx).load_image_;
+            struct fs_detail::image_loading_return res = rpc_accessor_.get_result(channel_idx).load_image_;
 
             sycl::range<2> image_size{res.x, res.y};
             if (image_accessor.get_range().get(0) < image_size.get(0) || image_accessor.get_range().get(1) < image_size.get(1)) {
-                accessor_.release(channel_idx);
+                rpc_accessor_.release(channel_idx);
                 return std::nullopt;
             }
 
@@ -131,8 +131,8 @@ namespace sycl {
                 }
             }
 
-            accessor_.release(channel_idx);
-            return range<2>(res.x, res.y);
+            rpc_accessor_.release(channel_idx);
+            return image_size;
         }
 
 #endif //IMAGE_LOAD_SUPPORT

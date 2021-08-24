@@ -1,16 +1,34 @@
 # Filesystem API for SYCL and Parallel Asynchronous Remote Procedure Calls
 
-This little project provides an implementation of a storage API for SYCL. The particularity of this API is that the calls can be emitted straight from a running SYCL kernel, without any interruption.
-This API communicates with the host using remote procedure calls. It is designed to leverage hardware capabilities of devices such as
-[NVIDIA's GPUDirect Storage](https://developer.nvidia.com/blog/gpudirect-storage/) which completely bypasses the host and allows the GPU to store and read data from a compatible file system. Without
-the DMA support, this api works in an emulated mode and uses the host's OS to store data. This emulated mode works on any filesystem, unlike the DMA one.
+This little project provides an implementation of a storage API for SYCL. The particularity of this API is that the calls can be emitted straight from a running SYCL kernel, without any interruption. This API
+communicates with the host using remote procedure calls. It is designed to leverage hardware capabilities of devices such as
+[NVIDIA's GPUDirect Storage](https://developer.nvidia.com/blog/gpudirect-storage/) which completely bypasses the host and allows the GPU to store and read data from a compatible file system. Without the DMA support, this
+api works in an emulated mode and uses the host's OS to store data. This emulated mode works on any filesystem, unlike the DMA one.
+
+## What's possible
+
+```c++
+fs<T> fs(q, 1, tmp_space);
+q.submit([&](handler &cgh) { /* Works on a GPU */
+    fs_accessor<T> storage_accessor = fs.get_access();
+    cgh.single_task([=]() {
+        /* Loading a picture using a C++ decoder on the host */
+        storage_accessor.load_image(0, "Cat.jpg", tmp_accessor); /* Returns the picture size on success */
+        /* Do your thing and then store the data in a simple file */
+        if (auto fh = storage_accessor.open<fs_mode::write_only>(0, "Neural_Network_Result.dat")) {
+            fh->write(data_buffer, data_length);
+            fh->close();
+        } 
+    });
+}).wait();
+```
 
 ## Features
 
-- Concurrent filesystem I/O from all the work-groups and work-items of a SYCL parallel kernel, at the same time.
-- Can leverage device's hardware IO features to bypass the host OS.
+- Concurrent filesystem I/O from all the work-groups and work-items.
+- Leveraging device's hardware IO features to bypass the host OS (DMA).
 - Possibility to open a file across a whole work-group to increase throughput and avoid the **divergence of the control flow**.
-- Possibility to write dataset-size independant kernels [see](examples/bmp_processing_better.cpp)
+- Possibility to use host libraries to encode/decode files, images, audio, video, streams, etc [see](examples/picture_loader_demo.cpp)
 - USM and accessor interface.
 - Dynamic threaded access to the underlying filesystem (enabled by default).
 - I/O latency control to reduce pressure on the CPU.
@@ -19,13 +37,13 @@ the DMA support, this api works in an emulated mode and uses the host's OS to st
 
 ## Target applications
 
-- Machine Learning: Using this API, one can train a network without having to ever stop the kernel to load new datasets. The SYCL kernel will be able to load the datasets, let's say pictures, itself.
-  One will also be able to save the trained network at runtime (which would even allow _inter-kernel_ communication).
+- Dataset-size independent kernels [example](examples/bmp_processing_better.cpp) (see NVIDIA cooperative groups programming paradigm)
+- Machine Learning: Using this API, one can train a network without having to ever stop the kernel to load new datasets. The SYCL kernel will be able to load the datasets, let's say pictures, itself. One will also be
+  able to save the trained network at runtime (which would even allow _inter-kernel_ communication).
 - Real-time processing: one could open some character devices in parallel and process the data in real time. Could be image recognition on a video feed.
-- Batch processing: See the example. With a single kernel launch and one fixed-size memory allocations, we can process an unbound number of files on the device (without having to re-alloc or re-launch
-  kernels).
-- Processing files that do not fit in the memory of the GPU: to process a petabyte dataset, on a regular GPU one would have to launch tons of kernels and manage the data. What if the kernel has to
-  perform random accesses on the file? Now it can all be done from the kernel. See [random_walk](examples/random_walk.cpp) which couldn't be eaily GPU accelerated otherwise.
+- Batch processing: See the example. With a single kernel launch and one fixed-size memory allocations, we can process an unbound number of files on the device (without having to re-alloc or re-launch kernels).
+- Processing files that do not fit in the memory of the GPU: to process a petabyte dataset, on a regular GPU one would have to launch tons of kernels and manage the data. What if the kernel has to perform random accesses
+  on the file? Now it can all be done from the kernel. See [random_walk](examples/random_walk.cpp) which couldn't be eaily GPU accelerated otherwise.
 - And many more!
 
 ### Async RPC features

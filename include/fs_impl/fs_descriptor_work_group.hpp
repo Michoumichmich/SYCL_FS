@@ -42,7 +42,7 @@ namespace sycl {
 
             struct fs_detail::write_args args{};
             if (work_item_id == 0) {
-                if (!base_descriptor_.accessor_.acquire(base_descriptor_.channel_idx_)) {
+                if (!base_descriptor_.rpc_accessor_.acquire(base_descriptor_.channel_idx_)) {
                     local_mem_[0].was_acquired = false;
                     local_mem_[0].retval = 0;
                     return 0;
@@ -74,11 +74,11 @@ namespace sycl {
             if (work_item_id == 0) {
                 // Doing the call
                 bool spawn = (sizeof(T) * elt_count) > byte_threshold;
-                base_descriptor_.accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
-                auto result = base_descriptor_.accessor_.get_result(base_descriptor_.channel_idx_);
+                base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
+                auto result = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_);
                 local_mem_[0].retval = result.write_.bytes_written / sizeof(T);
                 //printf("bytes %lu \n",result.write_v.bytes_written);
-                base_descriptor_.accessor_.release(base_descriptor_.channel_idx_);
+                base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
             }
             item_.barrier(sycl::access::fence_space::local_space);
             return local_mem_[0].retval;
@@ -101,7 +101,7 @@ namespace sycl {
 
             struct fs_detail::read_args args{};
             if (work_item_id == 0) {
-                if (!base_descriptor_.accessor_.acquire(base_descriptor_.channel_idx_)) {
+                if (!base_descriptor_.rpc_accessor_.acquire(base_descriptor_.channel_idx_)) {
                     local_mem_[0].was_acquired = false;
                     local_mem_[0].retval = 0;
                     return 0;
@@ -121,8 +121,8 @@ namespace sycl {
                 args.offset = offset;
                 args.offset_type = offset_type;
                 // Doing the call
-                base_descriptor_.accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
-                local_mem_[0].retval = base_descriptor_.accessor_.get_result(base_descriptor_.channel_idx_).read_.bytes_read / sizeof(T);
+                base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
+                local_mem_[0].retval = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_).read_.bytes_read / sizeof(T);
             }
             item_.barrier(sycl::access::fence_space::local_space);
 
@@ -135,7 +135,7 @@ namespace sycl {
 
             if (work_item_id == 0) {
                 //printf("bytes %lu \n",result.write_v.bytes_written);
-                base_descriptor_.accessor_.release(base_descriptor_.channel_idx_);
+                base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
             }
             item_.barrier(sycl::access::fence_space::local_space);
             return local_mem_[0].retval;

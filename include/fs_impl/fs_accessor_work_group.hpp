@@ -36,11 +36,11 @@ namespace sycl {
                 args.open_.opening_mode = mode;
                 memcpy(args.open_.filename, filename, filename_len);
                 //Opening the file on the host
-                if (!this->accessor_.template call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, true)) {
+                if (!this->rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, true)) {
                     return std::nullopt;
                 }
-                struct fs_detail::open_return res = this->accessor_.get_result(channel_idx).open_;
-                this->accessor_.release(channel_idx);
+                struct fs_detail::open_return res = this->rpc_accessor_.get_result(channel_idx).open_;
+                this->rpc_accessor_.release(channel_idx);
                 local_mem_[0].open_v = res;
             }
 
@@ -52,7 +52,7 @@ namespace sycl {
             if (!local_mem_[0].open_v.fd) {
                 return std::nullopt;
             } else {
-                return fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>(item, local_mem_, this->accessor_, channel_idx, local_mem_[0].open_v, this->get_host_buffer(channel_idx),
+                return fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>(item, local_mem_, this->rpc_accessor_, channel_idx, local_mem_[0].open_v, this->get_host_buffer(channel_idx),
                                                                                      this->buffer_len_);
             }
 
