@@ -14,7 +14,7 @@
 
 #define FILENAME "random_walk.tmp"
 
-using index_t = int32_t;
+using index_t = int64_t;
 
 /*******************************
  * Boilerplate setup functions *
@@ -105,16 +105,20 @@ int main()
 
     size_t step_count = 1000;
     size_t size = 1024 * 1024;
-    size_t worker_count = 10;
+    size_t worker_count = 100;
     auto expected = generate_file(step_count, size, worker_count);
 
-    scope_chrono c("computing values on the device");
-    auto results = run_random_walk(q, step_count, worker_count);
 
-    if (expected == results) {
-        std::cout << "Success!\n";
+    for(int c = 0 ; c < 1000 ; c++){
+        scope_chrono chrono("computing values on the device");
+        auto results = run_random_walk(q, step_count, worker_count);
+        if (expected == results) {
+            std::cout << "Success!\n";
+        }
+        else {
+            std::cout << "Failure!\n";
+        }
     }
-    else {
-        std::cout << "Failure!\n";
-    }
+
+
 }

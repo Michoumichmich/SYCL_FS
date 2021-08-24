@@ -18,3 +18,6 @@ add_sycl_to_target(TARGET fs_benchmark SOURCES examples/fs_benchmark.cpp)
 
 add_executable(random_walk examples/random_walk.cpp ${LIBRARY_INCLUDES})
 add_sycl_to_target(TARGET random_walk SOURCES examples/random_walk.cpp)
+
+add_executable(file_view_demo examples/file_view_demo.cpp ${LIBRARY_INCLUDES})
+add_sycl_to_target(TARGET file_view_demo SOURCES examples/file_view_demo.cpp)

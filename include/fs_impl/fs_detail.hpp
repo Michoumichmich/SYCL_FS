@@ -2,7 +2,14 @@
 
 #include <sycl/sycl.hpp>
 #include <cstdio>
+#include <string>
 #include <async_rpc.hpp>
+
+#ifdef IMAGE_LOAD_SUPPORT
+
+#include "codecs/image_decoder.h"
+
+#endif
 
 namespace sycl {
 
@@ -102,7 +109,7 @@ namespace sycl {
         }
 
         template<typename T>
-        static inline T *memcpy(T *dst, const volatile T * src, size_t elt_count) {
+        static inline T *memcpy(T *dst, const volatile T *src, size_t elt_count) {
             for (size_t i = 0; i < elt_count; ++i) {
                 dst[i] = src[i];
             }
@@ -120,7 +127,10 @@ namespace sycl {
             open,
             close,
             read,
-            write
+            write,
+#ifdef IMAGE_LOAD_SUPPORT
+            load_image
+#endif //IMAGE_LOAD_SUPPORT
         };
 
         /**
@@ -183,10 +193,10 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             volatile int32_t offset = 0;
             volatile fs_offset offset_type = fs_offset::current;
-            volatile void* volatile ptr = nullptr; // Volatile pointer to volatile data (yes)
+            volatile void *volatile ptr = nullptr; // Volatile pointer to volatile data (yes)
             volatile size_t size_bytes_elt = 1;
             volatile size_t elt_count = 1;
-            FILE* volatile fd = nullptr;
+            FILE *volatile fd = nullptr;
         };
 
         struct read_return {
@@ -199,7 +209,7 @@ namespace sycl {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
-            return read_return{.bytes_read = args.size_bytes_elt * args.elt_count * fread((void*) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
+            return read_return{.bytes_read = args.size_bytes_elt * args.elt_count * fread((void *) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
         }
 
         /**
@@ -209,10 +219,10 @@ namespace sycl {
             [[maybe_unused]] int32_t pad_1 = 0;
             volatile int32_t offset = 0;
             volatile fs_offset offset_type = fs_offset::current;
-            const volatile void* volatile ptr = nullptr; // Read only volatile pointer to volatile data
+            const volatile void *volatile ptr = nullptr; // Read only volatile pointer to volatile data
             volatile size_t size_bytes_elt = 0;
             volatile size_t elt_count = 0;
-            FILE* volatile fd = nullptr;
+            FILE *volatile fd = nullptr;
         };
 
         struct write_return {
@@ -228,6 +238,42 @@ namespace sycl {
             return write_return{.bytes_written= args.size_bytes_elt * args.elt_count * fwrite((void *) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
         }
 
+#ifdef IMAGE_LOAD_SUPPORT
+        /**
+         * Handles reading an image
+         */
+        struct image_reading_args {
+            [[maybe_unused]] size_t pad_1 = 0;
+            size_t available_space = 0;
+            char filename[fs_max_filename_len] = {0};
+            char *ptr = nullptr;
+            [[maybe_unused]] size_t pad_2 = 0;
+        };
+
+        struct image_reading_return {
+            [[maybe_unused]] size_t pad_1 = 0;
+            size_t x = 0;
+            size_t y = 0;
+            [[maybe_unused]] size_t pad_2 = 0;
+        };
+
+        static inline image_reading_return read_image(const image_reading_args &args) {
+            using namespace std::string_literals;
+            int x, y, n, ok;
+            ok = stbi_info(args.filename, &x, &y, &n);
+            if (!ok) {
+                throw std::runtime_error("Failed opening: "s + args.filename);
+            } else if (sizeof(char) * x * y * 4 > args.available_space) {
+                throw std::runtime_error("Buffer too small to load: "s + args.filename);
+            }
+
+            unsigned char *data = stbi_load(args.filename, &x, &y, &n, 4);
+            std::memcpy(args.ptr, data, sizeof(char) * x * y * 4);
+            return image_reading_return{.x=(size_t) x, .y=(size_t) y};
+        }
+
+#endif //IMAGE_LOAD_SUPPORT
+
         /**
          * Union containing the input arguments
          */
@@ -236,6 +282,9 @@ namespace sycl {
             struct close_args close_;
             struct read_args read_;
             struct write_args write_;
+#ifdef IMAGE_LOAD_SUPPORT
+            struct image_reading_args load_image_;
+#endif //IMAGE_LOAD_SUPPORT
         };
 
         /**
@@ -245,6 +294,9 @@ namespace sycl {
             struct open_return open_{};
             struct read_return read_;
             struct write_return write_;
+#ifdef IMAGE_LOAD_SUPPORT
+            struct image_reading_return load_image_;
+#endif //IMAGE_LOAD_SUPPORT
         };
 
         /**
@@ -286,6 +338,12 @@ namespace sycl {
                     in->set_retval(fs_returns{.write_ = res});
                 }
                     break;
+#ifdef IMAGE_LOAD_SUPPORT
+                case functions_def::load_image:
+                    in->set_retval(fs_returns{.load_image_ = read_image(in->get_func_args().load_image_)});
+                    break;
+#endif //IMAGE_LOAD_SUPPORT
+
             }
             asm("":: :"memory"); // Memory barrier to be sure everything was written.
             in->set_result_ready();

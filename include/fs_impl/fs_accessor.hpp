@@ -80,5 +80,41 @@ namespace sycl {
             }
             return std::nullopt;
         }
+
+#ifdef IMAGE_LOAD_SUPPORT
+        /**
+         * Opens a file in a specific mode and returns a file descriptor bound to the chosen channel.
+         * @tparam mode IO mode
+         * @param channel_idx Communication channel chosen
+         * @param filename name of the file to open. Max 256 chars
+         * @return a std optional containing, on success, the file descriptor
+         */
+      //  template<template<typename, int, sycl::access_mode, sycl::target, access::placeholder> class accessor_arg, access_mode access_mode, sycl::target target, access::placeholder placeholder>
+        std::optional<id<2>> load_image(size_t channel_idx, const char *filename)//, sycl::accessor<char, 2, sycl::access::mode::read_write, sycl::target::image, placeholder> image_accessor)
+        const {
+            if (channel_idx >= channel_count_) {
+                return std::nullopt;
+            }
+
+            size_t filename_len = fs_detail::strlen(filename);
+
+            if (filename_len >= fs_max_filename_len) {
+                return std::nullopt;
+            }
+
+            fs_detail::fs_args args{};
+            args.load_image_.ptr = (char *) get_host_buffer(channel_idx);
+            args.load_image_.available_space = sizeof(T) * buffer_len_;
+            memcpy(args.load_image_.filename, filename, filename_len);
+            //Load and decode the picture on the host
+            if (!accessor_.call_remote_procedure<fs_detail::functions_def::load_image>(channel_idx, args, true)) {
+                return std::nullopt;
+            }
+            struct fs_detail::image_reading_return res = accessor_.get_result(channel_idx).load_image_;
+
+            accessor_.release(channel_idx);
+            return id<2>(res.x, res.y);
+        }
+#endif //IMAGE_LOAD_SUPPORT
     };
 }
