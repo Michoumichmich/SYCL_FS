@@ -24,8 +24,9 @@ void launch_image_generator(sycl::queue &q, size_t max_x = 4000, size_t max_y = 
         cgh.single_task<load_image_kernel>([=]() {
             /* Loading the image into our 2D accessor */
             if (auto result = storage_accessor.load_image(0, "my_file000002.bmp", buffer_accessor)) {
-                /* load_image returns a std::optional<id<2>> that contains on success the picture dimension */
-                os << result->get(0) << " " << result->get(1) << sycl::endl;
+                os << "Successfully loaded with dimensions: " << result->get(0) << "x" << result->get(1) << sycl::endl;
+            } else {
+                os << "Failed opening the picture" << sycl::endl;
             }
         }); // single_task
     }).wait();

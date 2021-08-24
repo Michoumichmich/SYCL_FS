@@ -260,6 +260,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_1 = 0;
             size_t x = 0;
             size_t y = 0;
+            size_t success = 1;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
@@ -268,15 +269,17 @@ namespace sycl {
             int x, y, n, ok;
             ok = stbi_info(args.filename, &x, &y, &n);
             if (!ok) {
-                throw std::runtime_error("Failed opening: "s + args.filename);
+                std::cerr << "Failed opening: "s << args.filename << std::endl;
+                return image_loading_return{.x=0, .y=0, .success=0};
             } else if (sizeof(char) * (size_t) x * (size_t) y * 4 > args.available_space) {
-                throw std::runtime_error("Buffer too small to load: "s + args.filename);
+                std::cerr << "Buffer too small to load: "s << args.filename;
+                return image_loading_return{.x=0, .y=0, .success=0};
             }
 
             unsigned char *data = stbi_load(args.filename, &x, &y, &n, 4);
             std::memcpy(args.ptr, data, sizeof(char) * (size_t) x * (size_t) y * 4);
             stbi_image_free(data);
-            return image_loading_return{.x=(size_t) x, .y=(size_t) y};
+            return image_loading_return{.x=(size_t) x, .y=(size_t) y, .success=1};
         }
 
 #endif //IMAGE_LOAD_SUPPORT

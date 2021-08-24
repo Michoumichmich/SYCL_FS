@@ -94,7 +94,7 @@ namespace sycl {
                     state_ = rpc_channel_state::unused;
                     return true;
                 }
-                assert(false && "How did that happen? Was the channel released without being acquired or released twice?");
+                //assert(false && "How did that happen? Was the channel released without being acquired or released twice?");
                 return false;
             }
 
@@ -419,8 +419,9 @@ namespace sycl {
                             try {
                                 f(channels + i);
                             } catch (std::exception &e) {
-                                std::cerr << "Caught uncaught exception in RPC runner. "
-                                             "Silencing it to preserve other function calls that might be running in parallel and because we cannot cancel the SYCL kernel.\n"
+                                std::cerr << "Uncaught exception thrown in RPC runner (on the host).\n "
+                                             "Silencing it to preserve other function calls that might be running in parallel and because we cannot cancel the SYCL kernel. "
+                                             "The calling thread might be stuck on that RPC call. \n"
                                              "Exception was: " <<
                                           e.what() << std::endl;
                             }

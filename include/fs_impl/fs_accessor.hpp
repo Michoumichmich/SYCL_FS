@@ -117,6 +117,11 @@ namespace sycl {
             }
             struct fs_detail::image_loading_return res = rpc_accessor_.get_result(channel_idx).load_image_;
 
+            if (res.success != 1) {
+                rpc_accessor_.release(channel_idx);
+                return std::nullopt;
+            }
+
             sycl::range<2> image_size{res.x, res.y};
             if (image_accessor.get_range().get(0) < image_size.get(0) || image_accessor.get_range().get(1) < image_size.get(1)) {
                 rpc_accessor_.release(channel_idx);
