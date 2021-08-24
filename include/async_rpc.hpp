@@ -414,9 +414,16 @@ namespace sycl {
                     // We check if the channel can be executed, if so then we acquire a lock
                     if (channels[i].can_start_executing() && running_channels[i].compare_exchange_strong(expected_false_running_state, true)) {
                         //We clear the thread
-                        auto func = [=, &running_channels]() {
+                        auto func = [=, &running_channels]() noexcept {
                             channels[i].set_as_executing();
-                            f(channels + i);
+                            try {
+                                f(channels + i);
+                            } catch (std::exception &e) {
+                                std::cerr << "Caught uncaught exception in RPC runner. "
+                                             "Silencing it to preserve other function calls that might be running in parallel and because we cannot cancel the SYCL kernel.\n"
+                                             "Exception was: " <<
+                                          e.what() << std::endl;
+                            }
                             int64_t expected_after_run = true;
                             running_channels[i].compare_exchange_strong(expected_after_run, false);
                         };

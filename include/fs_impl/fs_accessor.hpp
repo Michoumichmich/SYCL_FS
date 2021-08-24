@@ -115,7 +115,7 @@ namespace sycl {
                 // failed to acquire the channel
                 return std::nullopt;
             }
-            struct fs_detail::image_reading_return res = accessor_.get_result(channel_idx).load_image_;
+            struct fs_detail::image_loading_return res = accessor_.get_result(channel_idx).load_image_;
 
             sycl::range<2> image_size{res.x, res.y};
             if (image_accessor.get_range().get(0) < image_size.get(0) || image_accessor.get_range().get(1) < image_size.get(1)) {

@@ -248,7 +248,7 @@ namespace sycl {
         /**
          * Handles reading an image
          */
-        struct image_reading_args {
+        struct image_loading_args {
             [[maybe_unused]] size_t pad_1 = 0;
             size_t available_space = 0;
             char filename[fs_max_filename_len] = {0};
@@ -256,14 +256,14 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        struct image_reading_return {
+        struct image_loading_return {
             [[maybe_unused]] size_t pad_1 = 0;
             size_t x = 0;
             size_t y = 0;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline image_reading_return read_image(const image_reading_args &args) {
+        static inline image_loading_return load_and_decode_image(const image_loading_args &args) {
             using namespace std::string_literals;
             int x, y, n, ok;
             ok = stbi_info(args.filename, &x, &y, &n);
@@ -275,7 +275,8 @@ namespace sycl {
 
             unsigned char *data = stbi_load(args.filename, &x, &y, &n, 4);
             std::memcpy(args.ptr, data, sizeof(char) * x * y * 4);
-            return image_reading_return{.x=(size_t) x, .y=(size_t) y};
+            stbi_image_free(data);
+            return image_loading_return{.x=(size_t) x, .y=(size_t) y};
         }
 
 #endif //IMAGE_LOAD_SUPPORT
@@ -289,7 +290,7 @@ namespace sycl {
             struct read_args read_;
             struct write_args write_;
 #ifdef IMAGE_LOAD_SUPPORT
-            struct image_reading_args load_image_;
+            struct image_loading_args load_image_;
 #endif //IMAGE_LOAD_SUPPORT
         };
 
@@ -301,7 +302,7 @@ namespace sycl {
             struct read_return read_;
             struct write_return write_;
 #ifdef IMAGE_LOAD_SUPPORT
-            struct image_reading_return load_image_;
+            struct image_loading_return load_image_;
 #endif //IMAGE_LOAD_SUPPORT
         };
 
@@ -346,7 +347,7 @@ namespace sycl {
                     break;
 #ifdef IMAGE_LOAD_SUPPORT
                 case functions_def::load_image:
-                    in->set_retval(fs_returns{.load_image_ = read_image(in->get_func_args().load_image_)});
+                    in->set_retval(fs_returns{.load_image_ = load_and_decode_image(in->get_func_args().load_image_)});
                     break;
 #endif //IMAGE_LOAD_SUPPORT
 
