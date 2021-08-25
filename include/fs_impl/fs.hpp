@@ -41,11 +41,11 @@ namespace sycl {
         /**
          * Returns an accessor to be used by the kernel
          */
-        fs_accessor <T, use_dma, use_pinned_memory> get_access() const {
+        [[nodiscard]] fs_accessor <T, use_dma, use_pinned_memory> get_access() const {
             return fs_accessor<T, use_dma, use_pinned_memory>(rpc_runner_.template get_access<true>(), channel_count_, buffer_len_, buffers_);
         }
 
-        fs_accessor_work_group <T, use_dma, use_pinned_memory> get_access_work_group(sycl::handler &cgh) const {
+        [[nodiscard]] fs_accessor_work_group <T, use_dma, use_pinned_memory> get_access_work_group(sycl::handler &cgh) const {
             return fs_accessor_work_group<T, use_dma, use_pinned_memory>(cgh, rpc_runner_.template get_access<true>(), channel_count_, buffer_len_, buffers_);
         }
 
@@ -62,7 +62,7 @@ namespace sycl {
         /**
          * Returns the free memory (in bytes) needed on the host in order for the API to work on the `sycl::queue` q.
          */
-        static size_t required_host_alloc_size(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
+        [[nodiscard]] static size_t required_host_alloc_size(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
             (void) q;
             size_t channel_alloc_size = sycl::async_rpc<fs_detail::functions_def, fs_detail::fs_args, fs_detail::fs_returns, parallel_host_file_io>::required_alloc_size(channel_count);
             if constexpr(use_dma) {
@@ -75,14 +75,14 @@ namespace sycl {
         /**
          * Returns the free memory (in bytes) needed on the device local memory in order for the API to work on the `sycl::queue` q.
          */
-        static size_t required_local_alloc_size_work_group(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
+        [[nodiscard]] static size_t required_local_alloc_size_work_group(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
             (void) channel_count;
             (void) q;
             (void) buffer_len;
             return sizeof(fs_detail::fs_accessor_local_mem);
         }
 
-        static size_t required_device_alloc_size(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
+        [[nodiscard]] static size_t required_device_alloc_size(const sycl::queue &q, size_t channel_count, size_t buffer_len) {
             (void) q;
             if constexpr (use_dma && use_pinned_memory) {
                 return channel_count * buffer_len * sizeof(T);
@@ -94,11 +94,11 @@ namespace sycl {
         /**
          * Returns whether the queue meets the required capabilities?
          */
-        static bool has_support(const sycl::queue &q) {
+        [[nodiscard]] static bool has_support(const sycl::queue &q) {
             return sycl::async_rpc<fs_detail::functions_def, fs_detail::fs_args, fs_detail::fs_returns, parallel_host_file_io>::has_support(q);
         }
 
-        static bool has_dma(const sycl::queue &q, const std::string &file = {}) {
+        [[nodiscard]] static bool has_dma(const sycl::queue &q, const std::string &file = {}) {
             (void) file;
             return q.get_device().is_cpu() || q.get_device().is_host();
         }

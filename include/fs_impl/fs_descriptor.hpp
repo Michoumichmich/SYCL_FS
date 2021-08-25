@@ -82,7 +82,12 @@ namespace sycl {
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;
 
             // Doing the call
-            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
+            if (!rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(channel_idx_, fs_detail::fs_args{.write_ = args}, spawn)) {
+                rpc_accessor_.release(channel_idx_);
+                return 0;
+            }
+
+
             auto result = rpc_accessor_.get_result(channel_idx_);
             size_t elts_written = result.write_.bytes_written / sizeof(T);
             //printf("bytes %lu \n",result.write_v.bytes_written);
@@ -130,7 +135,10 @@ namespace sycl {
 
             bool spawn = (sizeof(T) * elt_count) > byte_threshold;;
             // Doing the call
-            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
+            if (!rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(channel_idx_, fs_detail::fs_args{.read_ = args}, spawn)) {
+                rpc_accessor_.release(channel_idx_);
+                return 0;
+            }
 
             auto result = rpc_accessor_.get_result(channel_idx_);
             size_t elts_read = result.read_.bytes_read / sizeof(T);
@@ -174,17 +182,19 @@ namespace sycl {
 
             bool was_only_read = (open_mode == fs_mode::read_only); // Spawning a thread when there were writes
 
-            rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::close>(channel_idx_, fs_detail::fs_args{.close_ = args}, !was_only_read);
-            rpc_accessor_.wait(channel_idx_);
-            open_v_.fd = nullptr;
-            rpc_accessor_.release(channel_idx_);
+            if (rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::close>(channel_idx_, fs_detail::fs_args{.close_ = args}, !was_only_read)) {
+                rpc_accessor_.wait(channel_idx_);
+                open_v_.fd = nullptr;
+                rpc_accessor_.release(channel_idx_);
+            }
+
         }
 
         /**
          * Queries the file descriptor to get the maximum number of elts T one could read/write at once.
          * @return
          */
-        size_t get_max_single_io_count() {
+        [[nodiscard]] size_t get_max_single_io_count() const {
             return buffer_len_;
         }
 

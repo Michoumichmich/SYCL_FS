@@ -33,7 +33,7 @@ namespace sycl {
                   buffers_(buffers) {}
 
     protected:
-        T *get_host_buffer(size_t channel_idx) const {
+        [[nodiscard]] T *get_host_buffer(size_t channel_idx) const {
             return buffers_ + channel_idx * buffer_len_;
         }
 
@@ -43,7 +43,7 @@ namespace sycl {
          * Returns the number of channel that can be opened.
          * @return
          */
-        size_t get_channel_count() {
+        [[nodiscard]] size_t get_channel_count() const {
             return channel_count_;
         }
 
@@ -62,7 +62,7 @@ namespace sycl {
          * @return a std optional containing, on success, the file descriptor
          */
         template<fs_mode mode>
-        std::optional<sycl::fs_descriptor<T, mode, use_dma, use_pinned_memory>> open(size_t channel_idx, const char *filename) const {
+        [[nodiscard]] std::optional<sycl::fs_descriptor<T, mode, use_dma, use_pinned_memory>> open(size_t channel_idx, const char *filename) const {
             if (channel_idx >= channel_count_) {
                 return std::nullopt;
             }
@@ -98,7 +98,7 @@ namespace sycl {
          * @return a std optional containing, on success, the file descriptor
          */
         template<sycl::access::mode mode, sycl::access::target target>
-        std::optional<sycl::range<2>> load_image(size_t channel_idx, const char *filename, sycl::accessor<sycl::uchar4, 2, mode, target> image_accessor) const {
+        [[nodiscard]] std::optional<sycl::range<2>> load_image(size_t channel_idx, const char *filename, sycl::accessor<sycl::uchar4, 2, mode, target> image_accessor) const {
             if constexpr (mode == sycl::access::mode::read) {
                 fs_detail::fail_to_compile<mode>();
             }
@@ -129,17 +129,17 @@ namespace sycl {
                 return std::nullopt;
             }
 
-            sycl::range<2> image_size{res.x, res.y};
+            sycl::range<2> image_size{res.y, res.x};
             if (image_accessor.get_range().get(0) < image_size.get(0) || image_accessor.get_range().get(1) < image_size.get(1)) {
                 rpc_accessor_.release(channel_idx);
                 return std::nullopt;
             }
 
             auto data_ptr = (sycl::uchar *) get_host_buffer(channel_idx);
-            for (size_t x = 0; x < res.x; ++x) {
-                for (size_t y = 0; y < res.y; +y) {
+            for (size_t y = 0; y < res.y; ++y) { // Over the lines  y=0, x=0 -> top left
+                for (size_t x = 0; x < res.x; ++x) { // Within a line
                     sycl::uchar *local_ptr = data_ptr + (y * 4 * res.x) + 4 * x;
-                    image_accessor[id<2>(x, y)] == sycl::uchar4{local_ptr[0], local_ptr[1], local_ptr[2], local_ptr[3]};
+                    image_accessor[id<2>(y, x)] = sycl::uchar4{local_ptr[0], local_ptr[1], local_ptr[2], local_ptr[3]}; // RGBA
                 }
             }
 

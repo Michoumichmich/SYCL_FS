@@ -127,13 +127,14 @@ enum class fs_mode {
 
 ## 2.2 Single work-item accessor `fs_accessor<T, ...>`
 
-This accessor offers a single method:
+This accessor offers the following interface:
 
 ```C++
 template<typename T, bool use_dma = false, bool use_pinned_memory = false>
 class fs_accessor{
     template<fs_mode mode>
     std::optional<fs_descriptor<T, mode, use_dma, use_pinned_memory>> open(size_t channel_idx, const char* filename) const;
+    std::optional<sycl::range<2>> load_image(size_t channel_idx, const char *filename, sycl::accessor<sycl::uchar4, 2, mode, target> image_accessor) const;
 };
 ```
 
@@ -144,9 +145,14 @@ If this accessor is used in a `nd_range` kernel, one should be really careful to
 same (potentially undefined) behaviour as opening a file several times with `fopen`. Writing to the file will be wrong. One should also be careful to use a different `channel_idx` for each thread that
 opens a file, even if it's several times the same one.
 
-## 2.3 Parallel accessor `fs_accessor_work_group<T, ...>`
+`load_image` allows to load a picture into a `sycl::accessor<sycl::uchar4, 2, ...>` that has a compatible access mode. The continuous dimensions corresponds to a line. Each pixel is encoded in a `sycl::uchar4` (vector of four unsigned chars) in the order **RGBA**.
+We do not use `sycl::image` as DPC++ doesn't seem to support `read_write` accessors. Having a read/write only accessor won't really allow to use that library in a useful manner.
+The user must ensure that the buffer size, ie `buffer_len * sizeof(T)` can store the whole picture that has a size equal to `sizeof(sycl::uchar4) * x * y`. If that's not true, the 
+call will fail as a check is performed on the host to prevent overflows. That issue comes from the fact that we don't know the picture size before decoding it. 
+RMA mode is not handled as we cannot use the 2D `sycl::accessor` safely from the CPU.
+The call returns `std::optional<sycl::range<2>>` that contains the picture size, on success in the SYCL order, ie: `(y_size, x_size)`.
 
-As with the previous accessor, we have only a single method:
+## 2.3 Parallel accessor `fs_accessor_work_group<T, ...>`
 
 ```C++
 template<typename T, bool use_dma = false, bool use_pinned_memory = false>

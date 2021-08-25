@@ -6,9 +6,9 @@
 class load_image_kernel;
 
 template<typename T = char>
-void launch_image_generator(sycl::queue &q, size_t max_x = 4000, size_t max_y = 4000) {
+void launch_image_generator(sycl::queue &q, size_t max_x = 1920, size_t max_y = 1080) {
     size_t tmp_space = max_x * max_y * sizeof(sycl::uchar4) / sizeof(T);
-    sycl::buffer<sycl::uchar4, 2> image_buffer(sycl::range<2>(max_x, max_y));
+    sycl::buffer<sycl::uchar4, 2> image_buffer(sycl::range<2>(max_y, max_x));
 
     /**
      * We initialise the file system api on the host

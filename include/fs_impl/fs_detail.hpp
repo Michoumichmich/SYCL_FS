@@ -61,7 +61,7 @@ namespace sycl {
          * @param str
          * @return
          */
-        static inline size_t strlen(const char *str) {
+        [[nodiscard]] static inline size_t strlen(const char *str) {
             size_t i;
             for (i = 0; str[i] != '\0'; ++i);
             return i;
@@ -74,7 +74,7 @@ namespace sycl {
          * @return see libc
          */
         template<typename T>
-        static inline int memcmp(const T *str_1, const T *str_2, size_t count) {
+        [[nodiscard]] static inline int memcmp(const T *str_1, const T *str_2, size_t count) {
             const auto *s_1 = (const uint8_t *) str_1;
             const auto *s_2 = (const uint8_t *) str_2;
             while (count-- > 0) {
@@ -153,7 +153,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static open_return open(const open_args &args) {
+        [[nodiscard]] static open_return open(const open_args &args) {
             //std::cerr << "[info] Opening: " << std::string(args.filename) << std::endl;
             switch (args.opening_mode) {
                 case fs_mode::read_only:
@@ -211,7 +211,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline read_return read(const read_args &args) {
+        [[nodiscard]] static inline read_return read(const read_args &args) {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
@@ -237,7 +237,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline write_return write(const write_args &args) {
+        [[nodiscard]] static inline write_return write(const write_args &args) {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
@@ -264,7 +264,7 @@ namespace sycl {
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
-        static inline image_loading_return load_and_decode_image(const image_loading_args &args) {
+        [[nodiscard]] static inline image_loading_return load_and_decode_image(const image_loading_args &args) {
             using namespace std::string_literals;
             int x, y, n, ok;
             ok = stbi_info(args.filename, &x, &y, &n);

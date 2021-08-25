@@ -32,7 +32,7 @@ namespace sycl {
 
         struct global_state_data {
         private:
-            uint64_t nano_time_stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            uint64_t nano_time_stamp = (uint64_t) std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
             size_t abort_requested = 0;
 
         public:
@@ -41,7 +41,7 @@ namespace sycl {
              * HOST function, used by the runner
              */
             void update() {
-                nano_time_stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+                nano_time_stamp = (uint64_t) std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
             }
 
             /**
@@ -353,6 +353,7 @@ namespace sycl {
             channels_[channel_idx].set_function(func);
             channels_[channel_idx].set_func_args(args);
             channels_[channel_idx].set_allowed_to_spawn_host_thread(can_spawn_host_thread);
+            sycl::atomic_fence(sycl::memory_order::release, sycl::memory_scope::system);
             channels_[channel_idx].set_executable();
 
             if constexpr(!is_async) {
@@ -364,7 +365,7 @@ namespace sycl {
                 return result;
             }
 
-            // We cannot return a std::nullopt as the call must have succeeded, but
+            // We cannot return a std::nullopt as we don't know if the call has succeeded
             return channels_[channel_idx].get_retval();
         }
 
@@ -467,7 +468,13 @@ namespace sycl {
         volatile bool *keep_running_listener_ = nullptr; //DANGEROUS we're probably doing bad things by returning the reference of a local variable, but we can control the lifetime of the function so...
         std::thread listener_;
 
-        static inline void thread_runner(void (*f)(rpc_channel_t *), rpc_channel_t *channels, size_t count, volatile bool **class_switch_address, double frequency, rpc::global_state_data *global_state) {
+        static inline void thread_runner(
+                void (*f)(rpc_channel_t *),
+                rpc_channel_t *channels,
+                size_t count,
+                volatile bool **class_switch_address,
+                double frequency,
+                rpc::global_state_data *global_state) noexcept(!parallel_runners) {
             volatile bool keep_running_listener = true;
             const std::chrono::nanoseconds sleep_time = std::chrono::nanoseconds((frequency > 0) ? (int64_t) ((1e9 / frequency)) : 0);
             *class_switch_address = &keep_running_listener;
@@ -550,16 +557,21 @@ namespace sycl {
             listener_ = std::thread(thread_runner, rpc_channel_runner, channels_, channel_count_, &keep_running_listener_, runner_frequency, global_state_);
         }
 
+        /**
+         *
+         * @tparam async
+         * @return
+         */
         template<bool async>
-        rpc_accessor<functions_defined, func_args_u, ret_val_u, async> get_access() const {
+        [[nodiscard]] rpc_accessor<functions_defined, func_args_u, ret_val_u, async> get_access() const {
             return rpc_accessor<functions_defined, func_args_u, ret_val_u, async>(channels_, channel_count_, global_state_);
         }
 
         async_rpc(const async_rpc &) = delete;
 
-        async_rpc(async_rpc &&) noexcept = default;
+        async_rpc(async_rpc &&) noexcept = delete;
 
-        async_rpc &operator=(async_rpc &&) noexcept = default;
+        async_rpc &operator=(async_rpc &&) noexcept = delete;
 
         ~async_rpc() {
             while (!keep_running_listener_); /* We wait to be sure that the thread had time to start */
@@ -572,7 +584,7 @@ namespace sycl {
         /**
          * Returns the number of bytes that will need to be allocated on the HOST with sycl::malloc_host
          */
-        static size_t required_alloc_size(size_t channel_count) {
+        [[nodiscard]] static size_t required_alloc_size(size_t channel_count) {
             return channel_count * sizeof(rpc_channel_t) + sizeof(rpc::global_state_data);
         }
 
@@ -580,7 +592,7 @@ namespace sycl {
          * @param q Queue to test
          * @return returns whether the queue supports the API
          */
-        static bool has_support(const sycl::queue &q) {
+        [[nodiscard]] static bool has_support(const sycl::queue &q) {
             return q.get_device().has(sycl::aspect::usm_host_allocations) && // Asynchronous RPC requires a device with aspect::usm_host_allocations
                    q.get_device().has(sycl::aspect::usm_atomic_host_allocations); // Asynchronous RPC requires a device with aspect::usm_atomic_host_allocations
         }

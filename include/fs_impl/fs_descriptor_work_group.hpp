@@ -74,7 +74,11 @@ namespace sycl {
             if (work_item_id == 0) {
                 // Doing the call
                 bool spawn = (sizeof(T) * elt_count) > byte_threshold;
-                base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.write_ = args}, spawn);
+                if (!base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::write, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.write_ = args}, spawn)) {
+                    local_mem_[0].was_acquired = false;
+                    local_mem_[0].retval = 0;
+                    return 0;
+                }
                 auto result = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_);
                 local_mem_[0].retval = result.write_.bytes_written / sizeof(T);
                 //printf("bytes %lu \n",result.write_v.bytes_written);
@@ -121,7 +125,12 @@ namespace sycl {
                 args.offset = offset;
                 args.offset_type = offset_type;
                 // Doing the call
-                base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, spawn);
+                if (!base_descriptor_.rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::read, false>(base_descriptor_.channel_idx_, fs_detail::fs_args{.read_ = args}, spawn)) {
+                    local_mem_[0].was_acquired = false;
+                    local_mem_[0].retval = 0;
+                    return 0;
+                }
+
                 local_mem_[0].retval = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_).read_.bytes_read / sizeof(T);
             }
             item_.barrier(sycl::access::fence_space::local_space);
@@ -170,7 +179,7 @@ namespace sycl {
          * Queries the file descriptor to get the maximum number of elts T one could read/write at once.
          * @return
          */
-        size_t get_max_single_io_count() {
+        [[nodiscard]] size_t get_max_single_io_count() const {
             return base_descriptor_.get_max_single_io_count();
         }
 

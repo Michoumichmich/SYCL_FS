@@ -86,7 +86,9 @@ int main() {
 
             // We call the function 1, arguments are passed in a user-defined union "args"
             args func_args{.f_1 = idx};
-            async_caller.call_remote_procedure<functions_def::cpu_func_1>(idx, func_args, true);
+            if (!async_caller.call_remote_procedure<functions_def::cpu_func_1>(idx, func_args, true)) {
+                async_caller.abort();
+            }
 
             // We can try to get the return value in a non-blocking manner but the result will probably not be ready yet
             if (auto res = async_caller.try_get_result(idx)) { // try_get returns a std::optional
@@ -106,7 +108,7 @@ int main() {
             if (auto res = async_caller.try_get_result(idx)) { //
                 os << "[ASYNC device] Result try_get after wait: " << res->f_1 << sycl::endl;
             }
-            
+
             // And we release the communication channel for the other threads
             async_caller.release(idx);
         });
