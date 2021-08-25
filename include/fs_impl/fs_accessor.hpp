@@ -48,6 +48,13 @@ namespace sycl {
         }
 
         /**
+         * Produces a call to abort_host() on the host after it completed all pending operations.
+         */
+        void abort_host() const {
+            return rpc_accessor_.abort();
+        }
+
+        /**
          * Opens a file in a specific mode and returns a file descriptor bound to the chosen channel.
          * @tparam mode IO mode
          * @param channel_idx Communication channel chosen

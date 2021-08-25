@@ -14,7 +14,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. 
 
-@Author Michel Migdal
+@author Michel Migdal
 */
 
 
@@ -28,6 +28,49 @@ limitations under the License.
 
 namespace sycl {
     namespace rpc {
+
+
+        struct global_state_data {
+        private:
+            uint64_t nano_time_stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            size_t abort_requested = 0;
+
+        public:
+
+            /**
+             * HOST function, used by the runner
+             */
+            void update() {
+                nano_time_stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            }
+
+            /**
+             * HOST function, used by the runner
+             */
+            [[nodiscard]] bool was_requested_abort() const {
+                return abort_requested != 0;
+            }
+
+            /**
+             * DEVICE, to be called in a kernel
+             */
+            void request_abort() {
+                abort_requested = 1;
+            }
+
+            /**
+             * DEVICE, to be called in a kernel
+             */
+            [[nodiscard]] uint64_t get_timestamp() const {
+                return nano_time_stamp;
+            }
+
+            [[nodiscard]] static global_state_data *make_global(sycl::queue &q) {
+                auto global_state = sycl::malloc_host<global_state_data>(1, q);
+                return new(global_state) global_state_data();
+            }
+
+        };
 
         /**
          * State in which a channel can be. These states are not updated atomically
@@ -73,7 +116,7 @@ namespace sycl {
              * DEVICE function to get a channel
              * @return whether it could be acquired
              */
-            bool acquire_channel() {
+            [[nodiscard]] bool acquire_channel() {
                 int32_t expected = false;
                 ATOMIC_REF_NAMESPACE::atomic_ref<int32_t, ATOMIC_REF_NAMESPACE::memory_order::acq_rel, memory_scope::system, access::address_space::global_space> state_ref(channel_acquired_);
                 if (state_ref.compare_exchange_weak(expected, true, ATOMIC_REF_NAMESPACE::memory_order::acquire, sycl::memory_scope::system)) {
@@ -119,7 +162,7 @@ namespace sycl {
              * This should use atomic fences to ensure synchronisation with the DEVICE
              * @return
              */
-            bool can_start_executing() {
+            [[nodiscard]] bool can_start_executing() {
                 //
 #ifdef USING_DPCPP
                 sycl::atomic_fence(sycl::memory_order::acquire, sycl::memory_scope::system);
@@ -175,7 +218,7 @@ namespace sycl {
             /**
              * HOST
              */
-            functions_defined get_function() const {
+            [[nodiscard]] functions_defined get_function() const {
                 return function_;
             }
 
@@ -199,7 +242,7 @@ namespace sycl {
              * HOST
              * @return
              */
-            func_args_u get_func_args() const {
+            [[nodiscard]] func_args_u get_func_args() const {
                 return func_args_;
             }
 
@@ -215,7 +258,7 @@ namespace sycl {
              * DEVICE
              * @return
              */
-            ret_val_u get_retval() const {
+            [[nodiscard]] ret_val_u get_retval() const {
                 return retval_;
             }
 
@@ -263,6 +306,7 @@ namespace sycl {
          */
         mutable rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels_;
         const size_t channel_count_;
+        mutable rpc::global_state_data *global_state_;
 
     public:
         /**
@@ -270,10 +314,11 @@ namespace sycl {
          * @param channels
          * @param channel_count
          */
-        rpc_accessor(rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels, size_t channel_count)
+        rpc_accessor(rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels, size_t channel_count, rpc::global_state_data *state)
                 :
                 channels_(channels),
-                channel_count_(channel_count) {
+                channel_count_(channel_count),
+                global_state_(state) {
 
         }
 
@@ -297,7 +342,7 @@ namespace sycl {
          * else it's undefined and we need to get the result through a synchronisation function.
          */
         template<functions_defined func, bool do_acquire_channel = true, bool do_release_channel = true>
-        std::optional<ret_val_u> call_remote_procedure(size_t channel_idx, const func_args_u &args, bool can_spawn_host_thread = true) const {
+        [[nodiscard]] std::optional<ret_val_u> call_remote_procedure(size_t channel_idx, const func_args_u &args, bool can_spawn_host_thread = true) const {
             if constexpr(do_acquire_channel) {
                 if (channel_idx >= channel_count_ || !channels_[channel_idx].acquire_channel()) {
                     return std::nullopt; // Channel not acquired
@@ -332,9 +377,31 @@ namespace sycl {
             while (!channels_[channel_idx].is_result_ready()) {}
         }
 
-        void clear(size_t channel_idx) const {
+        /**
+         * DEVICE function
+         */
+        void clear_channel(size_t channel_idx) const {
             channels_[channel_idx].set_retval({});
             channels_[channel_idx].set_func_args({});
+        }
+
+        /**
+         * DEVICE function.
+         * Will initiate the abort_host() of the running program. First all running operations will be completed before aborting.
+         * There could be a delay, especially if the RPC listener is running in single threaded mode, but we don't want any
+         * form of corruption.
+         */
+        void abort() const {
+            global_state_->request_abort();
+        }
+
+        /**
+         * DEVICE function. Returns the current timestamp in nanoseconds. It is updated
+         * depending on the frequency chosen. Might not be as accurate as expected.
+         * @return uint64_t
+         */
+        [[nodiscard]] uint64_t get_timestamp() const {
+            return global_state_->get_timestamp();
         }
 
         /**
@@ -343,7 +410,7 @@ namespace sycl {
          * @param channel_idx
          * @return
          */
-        ret_val_u get_result(size_t channel_idx) const {
+        [[nodiscard]] ret_val_u get_result(size_t channel_idx) const {
             wait(channel_idx);
             return channels_[channel_idx].get_retval();
         }
@@ -354,7 +421,7 @@ namespace sycl {
          * @param channel_idx
          * @return
          */
-        std::optional<ret_val_u> try_get_result(size_t channel_idx) const {
+        [[nodiscard]] std::optional<ret_val_u> try_get_result(size_t channel_idx) const {
             if (channels_[channel_idx].is_result_ready()) {
                 return channels_[channel_idx].get_retval();
             }
@@ -370,7 +437,7 @@ namespace sycl {
          */
         void release(size_t channel_idx) const {
             wait(channel_idx);
-            clear(channel_idx);
+            clear_channel(channel_idx);
             channels_[channel_idx].release_channel();
         }
 
@@ -384,7 +451,7 @@ namespace sycl {
          * to `call_remote_procedure` so it does not try to acquire the channel.
          * @param channel_idx
          */
-        bool acquire(size_t channel_idx) const {
+        [[nodiscard]] bool acquire(size_t channel_idx) const {
             return channels_[channel_idx].acquire_channel();
         }
     };
@@ -394,12 +461,13 @@ namespace sycl {
     private:
         using rpc_channel_t = rpc::rpc_channel<functions_defined, func_args_u, ret_val_u>;
         rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels_ = nullptr;
+        rpc::global_state_data *global_state_ = nullptr;
         sycl::queue q_;
         size_t channel_count_;
         volatile bool *keep_running_listener_ = nullptr; //DANGEROUS we're probably doing bad things by returning the reference of a local variable, but we can control the lifetime of the function so...
         std::thread listener_;
 
-        static inline void thread_runner(void (*f)(rpc_channel_t *), rpc_channel_t *channels, size_t count, volatile bool **class_switch_address, double frequency) {
+        static inline void thread_runner(void (*f)(rpc_channel_t *), rpc_channel_t *channels, size_t count, volatile bool **class_switch_address, double frequency, rpc::global_state_data *global_state) {
             volatile bool keep_running_listener = true;
             const std::chrono::nanoseconds sleep_time = std::chrono::nanoseconds((frequency > 0) ? (int64_t) ((1e9 / frequency)) : 0);
             *class_switch_address = &keep_running_listener;
@@ -409,6 +477,13 @@ namespace sycl {
             }
             std::vector<std::thread> running_threads(count);
             while (keep_running_listener) {
+
+                /* Updating the global shared state and initiating shutdown if needed */
+                global_state->update();
+                if (global_state->was_requested_abort()) {
+                    keep_running_listener = false;
+                }
+
                 for (size_t i = 0; i < count && keep_running_listener; ++i) {
                     int64_t expected_false_running_state = false;
                     // We check if the channel can be executed, if so then we acquire a lock
@@ -450,11 +525,17 @@ namespace sycl {
                 }
             }
 
+            // aborting if needed
+            if (global_state->was_requested_abort()) {
+                abort();
+            }
+
+
         }
 
     public:
 
-        async_rpc(size_t channel_count, const sycl::queue &q, void (*rpc_channel_runner)(rpc_channel_t *), double runner_frequency = -1)
+        async_rpc(size_t channel_count, sycl::queue &q, void (*rpc_channel_runner)(rpc_channel_t *), double runner_frequency = -1)
                 : q_(q),
                   channel_count_(channel_count) {
             assert(channel_count > 0);
@@ -465,13 +546,13 @@ namespace sycl {
                 channels_[i] = rpc::rpc_channel<functions_defined, func_args_u, ret_val_u>{};
                 channels_[i].set_id(i);
             }
-
-            listener_ = std::thread(thread_runner, rpc_channel_runner, channels_, channel_count_, &keep_running_listener_, runner_frequency);
+            global_state_ = rpc::global_state_data::make_global(q);
+            listener_ = std::thread(thread_runner, rpc_channel_runner, channels_, channel_count_, &keep_running_listener_, runner_frequency, global_state_);
         }
 
         template<bool async>
         rpc_accessor<functions_defined, func_args_u, ret_val_u, async> get_access() const {
-            return rpc_accessor<functions_defined, func_args_u, ret_val_u, async>(channels_, channel_count_);
+            return rpc_accessor<functions_defined, func_args_u, ret_val_u, async>(channels_, channel_count_, global_state_);
         }
 
         async_rpc(const async_rpc &) = delete;
@@ -485,12 +566,20 @@ namespace sycl {
             *keep_running_listener_ = false;
             listener_.join();
             sycl::free(channels_, q_);
+            sycl::free(global_state_, q_);
         }
 
+        /**
+         * Returns the number of bytes that will need to be allocated on the HOST with sycl::malloc_host
+         */
         static size_t required_alloc_size(size_t channel_count) {
-            return channel_count * sizeof(rpc_channel_t);
+            return channel_count * sizeof(rpc_channel_t) + sizeof(rpc::global_state_data);
         }
 
+        /**
+         * @param q Queue to test
+         * @return returns whether the queue supports the API
+         */
         static bool has_support(const sycl::queue &q) {
             return q.get_device().has(sycl::aspect::usm_host_allocations) && // Asynchronous RPC requires a device with aspect::usm_host_allocations
                    q.get_device().has(sycl::aspect::usm_atomic_host_allocations); // Asynchronous RPC requires a device with aspect::usm_atomic_host_allocations

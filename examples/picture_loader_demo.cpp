@@ -26,7 +26,8 @@ void launch_image_generator(sycl::queue &q, size_t max_x = 4000, size_t max_y = 
             if (auto result = storage_accessor.load_image(0, "my_file000002.bmp", buffer_accessor)) {
                 os << "Successfully loaded with dimensions: " << result->get(0) << "x" << result->get(1) << sycl::endl;
             } else {
-                os << "Failed opening the picture" << sycl::endl;
+                os << "Failed opening the picture, will abort_host." << sycl::endl;
+                storage_accessor.abort_host();
             }
         }); // single_task
     }).wait();

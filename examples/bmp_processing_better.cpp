@@ -17,15 +17,6 @@ class processing_kernel;
 
 using namespace usm_smart_ptr;
 
-/**
- * Forces the compiler to dereference the null pointer
- * as writing to OS is part of the observable behaviour.
- */
-void abort_kernel(sycl::stream os) {
-    size_t p = 0;
-    os << *reinterpret_cast<int *>((int *) p) << sycl::endl;
-}
-
 size_t get_alloc_count(size_t width, size_t height) {
     return width * height + 4 - ((width * height) % 4);
 }
@@ -69,6 +60,7 @@ size_t launch_image_generator(size_t file_count, sycl::queue &q, size_t work_gro
                  * the actual writing will be done in parallel, using all the work items */
                 if (!bmp::save_picture_work_group(item, channel_idx, image_writer, filename_ptr, width, height, work_group_image_buffer)) {
                     os << "Failure saving: " << filename_ptr << sycl::endl;
+                    image_writer.abort_host();
                 }
             } // Back to for loop over the pictures
         }); // parallel_for
@@ -111,7 +103,7 @@ size_t launch_image_checker(size_t file_count, sycl::queue &q, size_t work_group
                     const pixel expected = yuv_2_rgb((50 * work_group_id + i % width) % 256, (50 * work_group_id + i / height) % 256, 150);
                     if (work_group_image_buffer[i] != expected) {
                         os << "Error, got: " << work_group_image_buffer[i] << " instead of: " << expected;
-                        abort_kernel(os);
+                        image_accessor.abort_host();
                     }
                 }
                 /* Parallel picture saving using the work group */

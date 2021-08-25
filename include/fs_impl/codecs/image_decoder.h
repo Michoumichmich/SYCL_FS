@@ -6795,7 +6795,7 @@ static stbi_uc *stbi__process_gif_raster(stbi__context *s, stbi__gif *g) {
                 return g->out;
             } else if (code <= avail) {
                 if (first) {
-                    return stbi__errpuc("no clear code", "Corrupt GIF");
+                    return stbi__errpuc("no clear_channel code", "Corrupt GIF");
                 }
 
                 if (oldcode >= 0) {

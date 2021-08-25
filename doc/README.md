@@ -46,7 +46,7 @@ Setting this parameter to true does not mean that the runner will necessarily la
 - \* check device+filesystem support with `fs::has_dma`.
 - \* \* everywhere where `fs::has_support` is `true`.
 - All calls can be emitted in parallel from a kernel.
-- A reasonable optimization on a Host/CPU device would be to use "DMA" even if the user didn't specified using DMA as this avoids useless memory copies and does not change the compatibility nor the
+- A reasonable optimization on a Host/CPU device would be to use "DMA" even if the user didn't specify using DMA as this avoids useless memory copies and does not change the compatibility nor the
   observable behaviour.
 
 ## 1.1 `fs` interface
@@ -171,6 +171,7 @@ When using DMA, this accessor has no advantage over the base one.
 | Methods                       | Description                                                        |
 | ----------------------------- | ------------------------------------------------------------------ |
 | `size_t get_channel_count();` | Returns the number of channel available to perform I/O operations. |
+| `size_t abort_host();` | Will initiate termination of the program. First all pending operations will be completed, threads joined before calling `abort()`. There might be some delay |
 
 # 3. Performing I/O
 
@@ -353,4 +354,4 @@ q.submit([&](sycl::handler& cgh) {
   async functions: `try_get_result`, `get_result` and `wait`. After getting the result one need to `release` the channel.
 - Template parameters of `call_remote_procedure`: `do_acquire_channel` and `do_release_channel` specify whether the call manages the channel lifetime. By default, both are set to `true`.
 - Even though we're talking about "remote procedure calls", they are in fact "remote function calls", the communication is bidirectional.
-- Releasing twice a channel or releasing a not acquired channel is wrong and will `abort()`.
+- Releasing twice a channel or releasing a not acquired channel is a programming error and will `abort()` by safety.

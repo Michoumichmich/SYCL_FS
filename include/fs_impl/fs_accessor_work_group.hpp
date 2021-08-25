@@ -18,6 +18,7 @@ namespace sycl {
 
     public:
         using fs_accessor<T, use_dma, use_pinned_memory>::get_channel_count;
+        using fs_accessor<T, use_dma, use_pinned_memory>::abort_host;
 
         template<fs_mode mode>
         std::optional<sycl::fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char *filename) const {

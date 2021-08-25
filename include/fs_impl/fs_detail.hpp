@@ -40,7 +40,7 @@ namespace sycl {
     namespace fs_detail {
 
         /**
-         * A dummy struct used to abort the compilation
+         * A dummy struct used to abort_host the compilation
          * if in a  'if constexpr' ladder nothing has
          * matched
          * @tparam M

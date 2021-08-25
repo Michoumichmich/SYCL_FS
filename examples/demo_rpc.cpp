@@ -106,8 +106,7 @@ int main() {
             if (auto res = async_caller.try_get_result(idx)) { //
                 os << "[ASYNC device] Result try_get after wait: " << res->f_1 << sycl::endl;
             }
-
-
+            
             // And we release the communication channel for the other threads
             async_caller.release(idx);
         });

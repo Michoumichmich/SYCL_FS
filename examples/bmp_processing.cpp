@@ -12,15 +12,6 @@ class processing_kernel;
 using namespace usm_smart_ptr;
 
 /**
- * Forces the compiler to dereference the null pointer
- * as writing to OS is part of the observable behaviour.
- */
-void abort_kernel(sycl::stream os) {
-    size_t p = 0;
-    os << *reinterpret_cast<int *>((int *) p) << sycl::endl;
-}
-
-/**
  * Each work group will process several pictures, one at a time, and then only one work item will write the picture to the hard drive.
  * This means that we can keep the number of parallel writers small this reduce the number of channels needed, reduce memory, and more importantly:
  * don't have to stop the gpu from running. One could notice that the memory allocation size is independent from the number of pictures to process, as
@@ -68,6 +59,7 @@ size_t launch_image_generator(size_t files_to_process, sycl::queue &q, size_t wo
                 if (item.get_local_linear_id() == 0) {
                     if (!bmp::save_picture(work_group_id, image_writer, filename_ptr, width, height, work_group_image_buffer)) {
                         os << "Failure saving: " << filename_ptr << sycl::endl;
+                        image_writer.abort_host();
                     }
                 }
 
@@ -103,7 +95,7 @@ size_t launch_image_checker(size_t files_to_process, sycl::queue &q, size_t work
                     const pixel expected = yuv_2_rgb((50 * work_group_id + i % width) % 256, (50 * work_group_id + i / height) % 256, 150);
                     if (work_group_image_buffer[i] != expected) {
                         os << "Error, got: " << work_group_image_buffer[i] << " instead of: " << expected;
-                        abort_kernel(os);
+                        image_accessor.abort_host();
                     }
                 }
 
