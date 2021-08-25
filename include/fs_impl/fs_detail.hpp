@@ -207,7 +207,7 @@ namespace sycl {
 
         struct read_return {
             [[maybe_unused]] size_t pad_1 = 0;
-            size_t bytes_read = 0;
+            size_t elements_read = 0;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
@@ -215,7 +215,7 @@ namespace sycl {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
-            return read_return{.bytes_read = args.size_bytes_elt * args.elt_count * fread((void *) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
+            return read_return{.elements_read = fread((void *) args.ptr, args.size_bytes_elt, args.elt_count, args.fd)};
         }
 
         /**
@@ -233,7 +233,7 @@ namespace sycl {
 
         struct write_return {
             [[maybe_unused]] size_t pad_1 = 0;
-            size_t bytes_written = 0;
+            size_t elements_written = 0;
             [[maybe_unused]] size_t pad_2 = 0;
         };
 
@@ -241,7 +241,7 @@ namespace sycl {
             if (args.offset_type != fs_offset::current || args.offset != 0) {
                 fseek(args.fd, args.offset * (int32_t) args.size_bytes_elt, (enum_storage_t) args.offset_type);
             }
-            return write_return{.bytes_written= args.size_bytes_elt * args.elt_count * fwrite((void *) args.ptr, args.size_bytes_elt * args.elt_count, 1, args.fd)};
+            return write_return{.elements_written= fwrite((void *) args.ptr, args.size_bytes_elt, args.elt_count, args.fd)};
         }
 
 #ifdef IMAGE_LOAD_SUPPORT

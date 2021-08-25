@@ -88,7 +88,7 @@ namespace sycl {
             }
 
             if (auto result = rpc_accessor_.get_result(channel_idx_)) {
-                size_t elts_written = result->write_.bytes_written / sizeof(T);
+                size_t elts_written = result->write_.elements_written;
                 rpc_accessor_.release(channel_idx_);
                 return elts_written;
             } else {
@@ -148,7 +148,7 @@ namespace sycl {
                 return 0;
             }
 
-            size_t elts_read = result->read_.bytes_read / sizeof(T);
+            size_t elts_read = result->read_.elements_read;
             // Getting the data from the host
             if constexpr(!use_dma) {
                 fs_detail::memcpy(device_dst, host_buffer_, elts_read);

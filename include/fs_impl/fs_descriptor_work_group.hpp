@@ -84,7 +84,7 @@ namespace sycl {
                     base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
                     local_mem_[0].retval = 0;
                 } else {
-                    local_mem_[0].retval = result->write_.bytes_written / sizeof(T);
+                    local_mem_[0].retval = result->write_.elements_written;
                     base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
                 }
             }
@@ -139,7 +139,7 @@ namespace sycl {
                 if (!result) {
                     local_mem_[0].retval = 0;
                 } else {
-                    local_mem_[0].retval = result->read_.bytes_read / sizeof(T);
+                    local_mem_[0].retval = result->read_.elements_read;
                 }
 
             }
