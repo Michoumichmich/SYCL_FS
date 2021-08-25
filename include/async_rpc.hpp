@@ -25,10 +25,11 @@ limitations under the License.
 #include <thread>
 #include <optional>
 #include <atomic>
+#include <execinfo.h>
+#include <unistd.h>
 
 namespace sycl {
     namespace rpc {
-
 
         struct global_state_data {
         private:
@@ -81,8 +82,8 @@ namespace sycl {
             transient_state /** Data partially written */,
             ready_to_execute /** Just waiting for a runner thread to execute the request */,
             running /** Currently computing the result in sync manner */,
-            async_wait [[maybe_unused]]  /** Currently computing the result in async manner */,
-            result_ready /** Indicates whether the function finished running  */
+            result_ready /** Indicates whether the function finished running  */,
+            caught_exception /** Indicates whether an exception was thrown by the runner on the host */
         };
 
         /**
@@ -160,10 +161,8 @@ namespace sycl {
             /**
              * HOST checks whether the channel can be executed
              * This should use atomic fences to ensure synchronisation with the DEVICE
-             * @return
              */
             [[nodiscard]] bool can_start_executing() {
-                //
 #ifdef USING_DPCPP
                 sycl::atomic_fence(sycl::memory_order::acquire, sycl::memory_scope::system);
 #else
@@ -193,6 +192,29 @@ namespace sycl {
 #pragma message ("Atomic fences needed but not supported by the implementation")
 #endif
                 state_ = rpc_channel_state::result_ready;
+            }
+
+            void set_uncaught_exception() {
+#ifdef USING_DPCPP
+                sycl::atomic_fence(sycl::memory_order::release, sycl::memory_scope::system);
+#else
+                asm("":: :"memory");
+#pragma message ("Atomic fences needed but not supported by the implementation")
+#endif
+                state_ = rpc_channel_state::caught_exception;
+            }
+
+            /**
+             * DEVICE
+             */
+            [[nodiscard]] bool is_result_ready_or_exception() const {
+#ifdef USING_DPCPP
+                sycl::atomic_fence(sycl::memory_order::acquire, sycl::memory_scope::system);
+#else
+                asm("":: :"memory");
+#pragma message ("Atomic fences needed but not supported by the implementation")
+#endif
+                return state_ == rpc_channel_state::result_ready || state_ == rpc_channel_state::caught_exception;
             }
 
             /**
@@ -291,13 +313,16 @@ namespace sycl {
     }
 
     /**
-     * All functions are executed her from the DEVICE
+     * All functions are executed here from the DEVICE
      * @tparam functions_defined
      * @tparam func_args_u
      * @tparam ret_val_u
      */
     template<typename functions_defined, typename func_args_u, typename ret_val_u, bool is_async>
-    class rpc_accessor {
+    class rpc_accessor;
+
+    template<typename functions_defined, typename func_args_u, typename ret_val_u>
+    class rpc_accessor<functions_defined, func_args_u, ret_val_u, false> {
     private:
 
         /**
@@ -308,6 +333,15 @@ namespace sycl {
         const size_t channel_count_;
         mutable rpc::global_state_data *global_state_;
 
+        void wait_for_call_completion(size_t channel_idx) const {
+            while (!channels_[channel_idx].is_result_ready_or_exception()) {}
+        }
+
+        void clear_channel(size_t channel_idx) const {
+            channels_[channel_idx].set_retval({});
+            channels_[channel_idx].set_func_args({});
+        }
+
     public:
         /**
          * Constructor not meant to be called by the user
@@ -315,31 +349,23 @@ namespace sycl {
          * @param channel_count
          */
         rpc_accessor(rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels, size_t channel_count, rpc::global_state_data *state)
-                :
-                channels_(channels),
-                channel_count_(channel_count),
-                global_state_(state) {
-
-        }
+                : channels_(channels),
+                  channel_count_(channel_count),
+                  global_state_(state) {}
 
         /**
-         * If we're in synchronous mode, the call is blocking, but automatically releases the channel and returns
+         * In synchronous mode, the call is blocking, but automatically releases the channel and returns
          * a `std::optional` with the result, on success.
-         *
-         * If we're in async mode, the call is non blocking, does not release the channel and using the value returned is undefined.
-         * The optional still indicated whether the call succeeded.
          *
          * @tparam func Function to call
          * @tparam do_acquire_channel We can ask not to acquire the channel if we pre-acquired it
-         * @tparam do_release_channel ONLY SYNC: We can ask not to release the channel if we want to use it after.
+         * @tparam do_release_channel We can ask not to release the channel if we want to use it after.
          * @param channel_idx Index of the channel used
          * @param args function arguments squashed in an union (but not necessarily)
          * @param can_spawn_host_thread indicates whether we allow the RPC to be launched in a separate thread on the side of the host
          * this can be useful to be set to false if we know that the function call is quick. But if we're doing ASYNC RPC and on the host, the function call is
          * blocking, it's not great. At the same time, launching inexpensive small functions in a thread can be very costly too.
          * @return the return an optional indicating whether the call succeeded.
-         * The contained value is the result only if we're in asynchronous mode,
-         * else it's undefined and we need to get the result through a synchronisation function.
          */
         template<functions_defined func, bool do_acquire_channel = true, bool do_release_channel = true>
         [[nodiscard]] std::optional<ret_val_u> call_remote_procedure(size_t channel_idx, const func_args_u &args, bool can_spawn_host_thread = true) const {
@@ -356,35 +382,20 @@ namespace sycl {
             sycl::atomic_fence(sycl::memory_order::release, sycl::memory_scope::system);
             channels_[channel_idx].set_executable();
 
-            if constexpr(!is_async) {
-                wait(channel_idx);
+            wait_for_call_completion(channel_idx);
+            if (channels_[channel_idx].is_result_ready()) {
                 auto result = channels_[channel_idx].get_retval();
                 if constexpr(do_release_channel) {
-                    release(channel_idx);
+                    channels_[channel_idx].release_channel();
                 }
                 return result;
+            } else { // An exception was thrown
+                return std::nullopt;
             }
-
-            // We cannot return a std::nullopt as we don't know if the call has succeeded
-            return channels_[channel_idx].get_retval();
         }
 
-        /**
-         * ASYNC ONLY
-         * Wait's for the result.
-         * @param channel_idx
-         */
-        void wait(size_t channel_idx) const {
-            while (!channels_[channel_idx].is_result_ready()) {}
-        }
 
-        /**
-         * DEVICE function
-         */
-        void clear_channel(size_t channel_idx) const {
-            channels_[channel_idx].set_retval({});
-            channels_[channel_idx].set_func_args({});
-        }
+    public:
 
         /**
          * DEVICE function.
@@ -405,29 +416,114 @@ namespace sycl {
             return global_state_->get_timestamp();
         }
 
+    };
+
+    /**
+     * ASYNC specialization
+     */
+    template<typename functions_defined, typename func_args_u, typename ret_val_u>
+    class rpc_accessor<functions_defined, func_args_u, ret_val_u, true> {
+    private:
+
         /**
-         * ASYNC ONLY & BLOCKING
-         * Returns an asynchronous result. Calling if with a sync api results in UB.
-         * @param channel_idx
-         * @return
+         * The accessor does not own the channels, so this field is mutable as it will
+         * be changed by the host to establish the communication.
          */
-        [[nodiscard]] ret_val_u get_result(size_t channel_idx) const {
-            wait(channel_idx);
-            return channels_[channel_idx].get_retval();
+        mutable rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels_;
+        const size_t channel_count_;
+        mutable rpc::global_state_data *global_state_;
+
+        inline void wait_for_call_completion(size_t channel_idx) const {
+            while (!channels_[channel_idx].is_result_ready_or_exception()) {}
+        }
+
+        inline void clear_channel(size_t channel_idx) const {
+            channels_[channel_idx].set_retval({});
+            channels_[channel_idx].set_func_args({});
+        }
+
+    public:
+        /**
+         * Constructor not meant to be called by the user
+         * @param channels
+         * @param channel_count
+         */
+        rpc_accessor(rpc::rpc_channel<functions_defined, func_args_u, ret_val_u> *channels, size_t channel_count, rpc::global_state_data *state)
+                : channels_(channels),
+                  channel_count_(channel_count),
+                  global_state_(state) {}
+
+        /**
+         * The call is non blocking, and never releases the channel.
+         * @tparam func Function to call
+         * @tparam do_acquire_channel We can ask not to acquire the channel if we pre-acquired it
+         * @param channel_idx Index of the channel used
+         * @param args function arguments squashed in an union (but not necessarily)
+         * @param can_spawn_host_thread indicates whether we allow the RPC to be launched in a separate thread on the side of the host
+         * this can be useful to be set to false if we know that the function call is quick. But if we're doing ASYNC RPC and on the host, the function call is
+         * blocking, it's not great. At the same time, launching inexpensive small functions in a thread can be very costly too.
+         * @return the return a bool indicating whether the call succeeded
+         */
+        template<functions_defined func, bool do_acquire_channel = true>
+        [[nodiscard]] inline bool call_remote_procedure(size_t channel_idx, const func_args_u &args, bool can_spawn_host_thread = true) const {
+            if constexpr(do_acquire_channel) {
+                if (channel_idx >= channel_count_ || !channels_[channel_idx].acquire_channel()) {
+                    return false;
+                }
+            }
+
+            // Channel is in transient state
+            channels_[channel_idx].set_function(func);
+            channels_[channel_idx].set_func_args(args);
+            channels_[channel_idx].set_allowed_to_spawn_host_thread(can_spawn_host_thread);
+            sycl::atomic_fence(sycl::memory_order::release, sycl::memory_scope::system);
+            channels_[channel_idx].set_executable();
+
+            // We cannot return a std::nullopt as we don't yet know if the call has succeeded
+            return true;
         }
 
         /**
-         * ASYNC ONLY & NON-BLOCKING
-         * Returns an asynchronous result if available. Calling if with a sync api results in UB.
+         * DEVICE function.
+         * Will initiate the abort_host() of the running program. First all running operations will be completed before aborting.
+         * There could be a delay, especially if the RPC listener is running in single threaded mode, but we don't want any
+         * form of corruption.
+         */
+        inline void abort() const {
+            global_state_->request_abort();
+        }
+
+        /**
+         * DEVICE function. Returns the current timestamp in nanoseconds. It is updated
+         * depending on the frequency chosen. Might not be as accurate as expected.
+         * @return uint64_t
+         */
+        [[nodiscard]] inline uint64_t get_timestamp() const {
+            return global_state_->get_timestamp();
+        }
+
+        /**
+         * NON-BLOCKING Returns an asynchronous result if available.
          * @param channel_idx
          * @return
          */
-        [[nodiscard]] std::optional<ret_val_u> try_get_result(size_t channel_idx) const {
+        [[nodiscard]] inline std::optional<ret_val_u> try_get_result(size_t channel_idx) const {
             if (channels_[channel_idx].is_result_ready()) {
                 return channels_[channel_idx].get_retval();
             }
             return std::nullopt;
         }
+
+        /**
+         * BLOCKING Returns an asynchronous result. Calling if with a sync api results in UB.
+         * @param channel_idx
+         * @return
+         */
+        [[nodiscard]] inline std::optional<ret_val_u> get_result(size_t channel_idx) const {
+            wait_for_call_completion(channel_idx);
+            return try_get_result(channel_idx);
+        }
+
 
         /**
          * ASYNC ONLY release the channel after getting your result back.
@@ -436,8 +532,8 @@ namespace sycl {
          * that are tied to a channel_idx.
          * @param channel_idx
          */
-        void release(size_t channel_idx) const {
-            wait(channel_idx);
+        void inline release(size_t channel_idx) const {
+            wait_for_call_completion(channel_idx);
             clear_channel(channel_idx);
             channels_[channel_idx].release_channel();
         }
@@ -452,7 +548,7 @@ namespace sycl {
          * to `call_remote_procedure` so it does not try to acquire the channel.
          * @param channel_idx
          */
-        [[nodiscard]] bool acquire(size_t channel_idx) const {
+        [[nodiscard]] inline bool acquire(size_t channel_idx) const {
             return channels_[channel_idx].acquire_channel();
         }
     };
@@ -479,7 +575,7 @@ namespace sycl {
             const std::chrono::nanoseconds sleep_time = std::chrono::nanoseconds((frequency > 0) ? (int64_t) ((1e9 / frequency)) : 0);
             *class_switch_address = &keep_running_listener;
             std::vector<std::atomic<int64_t>> running_channels(count);
-            for (auto &item : running_channels) {
+            for (auto &item: running_channels) {
                 item = false;
             }
             std::vector<std::thread> running_threads(count);
@@ -499,13 +595,18 @@ namespace sycl {
                         auto func = [=, &running_channels]() noexcept {
                             channels[i].set_as_executing();
                             try {
+                                asm("":: :"memory"); // Memory barrier to be sure everything was written.
                                 f(channels + i);
+                                asm("":: :"memory"); // Memory barrier to be sure everything was written.
+                                channels[i].set_result_ready();
+                                asm("":: :"memory"); // Memory barrier to be sure everything was written.
                             } catch (std::exception &e) {
-                                std::cerr << "Uncaught exception thrown in RPC runner (on the host).\n "
-                                             "Silencing it to preserve other function calls that might be running in parallel and because we cannot cancel the SYCL kernel. "
-                                             "The calling thread might be stuck on that RPC call. \n"
+                                std::cerr << "Uncaught exception thrown in RPC runner (on the host).\n"
+                                             "Silencing it to preserve other function calls that might be running in parallel\n"
+                                             "Function call will appear as failed on the device\n"
                                              "Exception was: " <<
                                           e.what() << std::endl;
+                                channels[i].set_uncaught_exception();
                             }
                             int64_t expected_after_run = true;
                             running_channels[i].compare_exchange_strong(expected_after_run, false);
@@ -534,6 +635,10 @@ namespace sycl {
 
             // aborting if needed
             if (global_state->was_requested_abort()) {
+                std::cerr << "Abort called from a thread" << std::endl;
+                void *array[10];
+                int size = backtrace(array, 10);
+                backtrace_symbols_fd(array, size, STDERR_FILENO);
                 abort();
             }
 

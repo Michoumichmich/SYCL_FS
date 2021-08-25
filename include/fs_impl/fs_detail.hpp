@@ -321,8 +321,6 @@ namespace sycl {
                 fail_to_compile<use_dma>();
             }
 
-
-            asm("":: :"memory"); // Memory barrier to be sure everything was written.
             switch (in->get_function()) {
                 case functions_def::open: {
                     struct open_return res = open(in->get_func_args().open_);
@@ -349,15 +347,12 @@ namespace sycl {
                 }
                     break;
 #ifdef IMAGE_LOAD_SUPPORT
-                case functions_def::load_image:
-                    in->set_retval(fs_returns{.load_image_ = load_and_decode_image(in->get_func_args().load_image_)});
-                    break;
+                    case functions_def::load_image:
+                        in->set_retval(fs_returns{.load_image_ = load_and_decode_image(in->get_func_args().load_image_)});
+                        break;
 #endif //IMAGE_LOAD_SUPPORT
 
             }
-            asm("":: :"memory"); // Memory barrier to be sure everything was written.
-            in->set_result_ready();
-            asm("":: :"memory"); // Memory barrier to be sure everything was written.
         }
 
         template<class T, int Dim>

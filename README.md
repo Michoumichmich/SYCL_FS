@@ -43,17 +43,17 @@ q.submit([&](handler &cgh) { /* Works on a GPU */
 - Real-time processing: one could open some character devices in parallel and process the data in real time. Could be image recognition on a video feed.
 - Batch processing: See the example. With a single kernel launch and one fixed-size memory allocations, we can process an unbound number of files on the device (without having to re-alloc or re-launch kernels).
 - Processing files that do not fit in the memory of the GPU: to process a petabyte dataset, on a regular GPU one would have to launch tons of kernels and manage the data. What if the kernel has to perform random accesses
-  on the file? Now it can all be done from the kernel. See [random_walk](examples/random_walk.cpp) which couldn't be eaily GPU accelerated otherwise.
-- And many more!
+  on the file? Now it can all be done from the kernel. See [random_walk](examples/random_walk.cpp) which couldn't be easily GPU accelerated otherwise.
 
 ### Async RPC features
 
 - Parallel API: all work-items can call functions at the same time.
 - From a SYCL kernel, one can choose to perform a function call in synchronous or asynchronous manner.
-- The host can answer to the function calls in a synchronous or asynchronous manner.
-- When calling a host function from a SYCL kernel, one can choose whether the host will spawn a thread to answer the call, if the functions expensive or blocking.
+- The host can answer to the function calls in a synchronous or asynchronous manner and one can choose, from a kernel whether the host will spawn a thread. Useful if the functions expensive or blocking.
 - Easy to set up: the user defines the functions that will be remotely executed and provides a _runner_ function that will do the call on the host (probably a big `switch`).
 - Ability to choose the frequency with which the HOST will be answering the function calls, to avoid starvation.
+- Exceptions thrown by the remote function call, on the host, are caught and the function call from the GPU will appear as failed.
+- The user can now safely call `abort()` from a SYCL kernel (all pending calls are completed before crashing the host) and access a global timer.
 
 ## Performance
 

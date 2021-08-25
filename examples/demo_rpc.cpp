@@ -98,15 +98,18 @@ int main() {
             //Do other stuff in meanwhile ...
 
             // Force to get the result (with synchronisation)
-            results res_u = async_caller.get_result(idx);
-            os << "[ASYNC device] Result after get: " << res_u.f_1 << sycl::endl;
 
-            //One could also wait
-            async_caller.wait(idx);
+            if (auto result = async_caller.get_result(idx)) { // call succeeds/no exception
+                results res_u = *result;
+                os << "[ASYNC device] Result after get: " << res_u.f_1 << sycl::endl;
+            } else {
+                os << "Call failed. Exception thrown on device?" << sycl::endl;
+            }
+
 
             // And then the result is immediate
             if (auto res = async_caller.try_get_result(idx)) { //
-                os << "[ASYNC device] Result try_get after wait: " << res->f_1 << sycl::endl;
+                os << "[ASYNC device] Result try_get after wait_for_call_completion: " << res->f_1 << sycl::endl;
             }
 
             // And we release the communication channel for the other threads

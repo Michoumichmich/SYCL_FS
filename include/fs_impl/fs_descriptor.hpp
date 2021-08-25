@@ -87,12 +87,14 @@ namespace sycl {
                 return 0;
             }
 
-
-            auto result = rpc_accessor_.get_result(channel_idx_);
-            size_t elts_written = result.write_.bytes_written / sizeof(T);
-            //printf("bytes %lu \n",result.write_v.bytes_written);
-            rpc_accessor_.release(channel_idx_);
-            return elts_written;
+            if (auto result = rpc_accessor_.get_result(channel_idx_)) {
+                size_t elts_written = result->write_.bytes_written / sizeof(T);
+                rpc_accessor_.release(channel_idx_);
+                return elts_written;
+            } else {
+                rpc_accessor_.release(channel_idx_);
+                return 0;
+            }
         }
 
         /**
@@ -141,14 +143,16 @@ namespace sycl {
             }
 
             auto result = rpc_accessor_.get_result(channel_idx_);
-            size_t elts_read = result.read_.bytes_read / sizeof(T);
-
-            // Getting the data from the host
-
-            if constexpr(!use_dma) {
-                fs_detail::memcpy(device_dst, host_buffer_, elt_count);
+            if (!result) {
+                rpc_accessor_.release(channel_idx_);
+                return 0;
             }
 
+            size_t elts_read = result->read_.bytes_read / sizeof(T);
+            // Getting the data from the host
+            if constexpr(!use_dma) {
+                fs_detail::memcpy(device_dst, host_buffer_, elts_read);
+            }
             rpc_accessor_.release(channel_idx_);
             return elts_read;
         }
@@ -179,15 +183,13 @@ namespace sycl {
         void close() {
             if (!open_v_.fd) { return; }
             struct fs_detail::close_args args{.fd = open_v_.fd};
-
             bool was_only_read = (open_mode == fs_mode::read_only); // Spawning a thread when there were writes
-
             if (rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::close>(channel_idx_, fs_detail::fs_args{.close_ = args}, !was_only_read)) {
-                rpc_accessor_.wait(channel_idx_);
-                open_v_.fd = nullptr;
+                if (rpc_accessor_.get_result(channel_idx_)) {
+                    open_v_.fd = nullptr;
+                }
                 rpc_accessor_.release(channel_idx_);
             }
-
         }
 
         /**

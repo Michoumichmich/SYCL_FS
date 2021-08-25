@@ -80,11 +80,15 @@ namespace sycl {
             if (!rpc_accessor_.call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, false)) {
                 return std::nullopt;
             }
-            struct fs_detail::open_return res = rpc_accessor_.get_result(channel_idx).open_;
-            rpc_accessor_.release(channel_idx);
-            if (res.fd) {
-                return fs_descriptor<T, mode, use_dma, use_pinned_memory>(rpc_accessor_, channel_idx, res, get_host_buffer(channel_idx), buffer_len_);
+
+            if (auto result = rpc_accessor_.get_result(channel_idx)) {
+                struct fs_detail::open_return res = result->open_;
+                if (res.fd) {
+                    rpc_accessor_.release(channel_idx);
+                    return fs_descriptor<T, mode, use_dma, use_pinned_memory>(rpc_accessor_, channel_idx, res, get_host_buffer(channel_idx), buffer_len_);
+                }
             }
+            rpc_accessor_.release(channel_idx);
             return std::nullopt;
         }
 
@@ -118,11 +122,19 @@ namespace sycl {
             args.load_image_.available_space = sizeof(T) * buffer_len_;
             memcpy(args.load_image_.filename, filename, filename_len);
             //Load and decode the picture on the host
-            if (!rpc_accessor_.call_remote_procedure<fs_detail::functions_def::load_image, true, false>(channel_idx, args, true)) {
+            if (!rpc_accessor_.call_remote_procedure<fs_detail::functions_def::load_image, true>(channel_idx, args, true)) {
                 // failed to acquire the channel
                 return std::nullopt;
             }
-            struct fs_detail::image_loading_return res = rpc_accessor_.get_result(channel_idx).load_image_;
+
+
+            auto call_result = rpc_accessor_.get_result(channel_idx);
+            if (!call_result) {
+                rpc_accessor_.release(channel_idx);
+                return std::nullopt;
+            }
+
+            struct fs_detail::image_loading_return res = call_result->load_image_;
 
             if (res.success != 1) {
                 rpc_accessor_.release(channel_idx);

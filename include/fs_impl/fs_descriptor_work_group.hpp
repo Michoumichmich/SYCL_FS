@@ -80,9 +80,13 @@ namespace sycl {
                     return 0;
                 }
                 auto result = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_);
-                local_mem_[0].retval = result.write_.bytes_written / sizeof(T);
-                //printf("bytes %lu \n",result.write_v.bytes_written);
-                base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
+                if (!result) {
+                    base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
+                    local_mem_[0].retval = 0;
+                } else {
+                    local_mem_[0].retval = result->write_.bytes_written / sizeof(T);
+                    base_descriptor_.rpc_accessor_.release(base_descriptor_.channel_idx_);
+                }
             }
             item_.barrier(sycl::access::fence_space::local_space);
             return local_mem_[0].retval;
@@ -131,7 +135,13 @@ namespace sycl {
                     return 0;
                 }
 
-                local_mem_[0].retval = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_).read_.bytes_read / sizeof(T);
+                auto result = base_descriptor_.rpc_accessor_.get_result(base_descriptor_.channel_idx_);
+                if (!result) {
+                    local_mem_[0].retval = 0;
+                } else {
+                    local_mem_[0].retval = result->read_.bytes_read / sizeof(T);
+                }
+
             }
             item_.barrier(sycl::access::fence_space::local_space);
 

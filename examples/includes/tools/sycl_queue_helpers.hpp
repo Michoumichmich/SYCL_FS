@@ -29,7 +29,7 @@ public:
 template<bool strict = true, typename T>
 inline sycl::queue try_get_queue(const T &selector) {
     auto exception_handler = [](const sycl::exception_list &exceptions) {
-        for (std::exception_ptr const &e : exceptions) {
+        for (std::exception_ptr const &e: exceptions) {
             try {
                 std::rethrow_exception(e);
             }

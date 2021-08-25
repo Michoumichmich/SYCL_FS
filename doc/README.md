@@ -357,7 +357,7 @@ q.submit([&](sycl::handler& cgh) {
   channel index. That is exactly how the file system API was built.
 - A synchronous call always returns an `std::optional` which, on success, contains the value. The communication channel is always automatically closed unless asked otherwise.
 - An asynchronous call won't close the channel as we need to query it later to get the result. Using the value returned, on success, in the `std::optional` from the rpc call is UB. One need to use the
-  async functions: `try_get_result`, `get_result` and `wait`. After getting the result one need to `release` the channel.
+  async functions: `try_get_result` and `get_result`. After getting the result one need to `release` the channel.
 - Template parameters of `call_remote_procedure`: `do_acquire_channel` and `do_release_channel` specify whether the call manages the channel lifetime. By default, both are set to `true`.
 - Even though we're talking about "remote procedure calls", they are in fact "remote function calls", the communication is bidirectional.
 - Releasing twice a channel or releasing a not acquired channel is a programming error and will `abort()` by safety.

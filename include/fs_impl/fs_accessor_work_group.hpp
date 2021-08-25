@@ -22,33 +22,33 @@ namespace sycl {
 
         template<fs_mode mode>
         [[nodiscard]] std::optional<sycl::fs_descriptor_work_group<T, mode, use_dma, use_pinned_memory>> open(sycl::nd_item<1> item, size_t channel_idx, const char *filename) const {
-            if (item.get_local_linear_id() == 0) {
-                if (channel_idx >= this->channel_count_) {
-                    return std::nullopt;
-                }
-
-                size_t filename_len = fs_detail::strlen(filename);
-
-                if (filename_len >= fs_max_filename_len) {
-                    return std::nullopt;
-                }
-
-                fs_detail::fs_args args{};
-                args.open_.opening_mode = mode;
-                memcpy(args.open_.filename, filename, filename_len);
-                //Opening the file on the host
-                if (!this->rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, true)) {
-                    return std::nullopt;
-                }
-                struct fs_detail::open_return res = this->rpc_accessor_.get_result(channel_idx).open_;
-                this->rpc_accessor_.release(channel_idx);
-                local_mem_[0].open_v = res;
-            }
+            item.barrier(sycl::access::fence_space::local_space);
 
             /**
-             * One thread opened the file and saved the result in the local memory,
-             * we then
+             * One thread opens the file and saves the result in the local memory,
              */
+            if (item.get_local_linear_id() == 0) {
+                size_t filename_len = fs_detail::strlen(filename);
+                local_mem_[0].open_v.fd = nullptr;
+
+                if (channel_idx < this->channel_count_ && filename_len < fs_max_filename_len) {
+                    fs_detail::fs_args args{};
+                    args.open_.opening_mode = mode;
+                    memcpy(args.open_.filename, filename, filename_len);
+                    //Opening the file on the host
+                    if (this->rpc_accessor_.template call_remote_procedure<fs_detail::functions_def::open>(channel_idx, args, true)) {
+                        auto result = this->rpc_accessor_.get_result(channel_idx);
+                        if (result) {
+                            struct fs_detail::open_return res = result->open_;
+                            this->rpc_accessor_.release(channel_idx);
+                            local_mem_[0].open_v = res;
+                        } else {
+                            this->rpc_accessor_.release(channel_idx);
+                        }
+                    }
+                }
+            }
+
             item.barrier(sycl::access::fence_space::local_space);
             if (!local_mem_[0].open_v.fd) {
                 return std::nullopt;
